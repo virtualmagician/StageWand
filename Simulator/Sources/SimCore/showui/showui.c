@@ -14,9 +14,11 @@
  * sleep (blackout).
  */
 #include <stdio.h>
+#include <string.h>
 #include "lvgl.h"
 #include "showui.h"
 #include "showui_hal.h"
+#include "showlink.h"
 
 /* --- palette (AMOLED true-black theme, amber accent) ---------------------- */
 #define COL_BG       lv_color_black()
@@ -61,14 +63,22 @@ static bool s_asleep = false;  /* PWR: display blackout */
 /* --- widgets we update at runtime ----------------------------------------- */
 static lv_obj_t *s_tv;
 static lv_obj_t *s_dots[TILE_COUNT];
-static lv_obj_t *s_time_label, *s_batt_label, *s_wifi_label;
-static lv_obj_t *s_cue_num, *s_cue_name, *s_cue_next, *s_cue_pos;
+static lv_obj_t *s_time_label, *s_batt_label, *s_wifi_label, *s_link_dot;
+static lv_obj_t *s_cue_eyebrow, *s_cue_num, *s_cue_name, *s_cue_next, *s_cue_pos;
 static lv_obj_t *s_go_btn, *s_go_label, *s_stby_btn;
 static lv_obj_t *s_list_rows[CUE_COUNT];
 static lv_obj_t *s_imu_label, *s_bri_value;
 static lv_obj_t *s_sleep_overlay;
 
 static bool s_prev_boot = false, s_prev_pwr = false;
+static bool s_link_live = false;  /* StageWizard link enabled AND online */
+
+/* Update a label only when its text actually changes, so link refreshes
+ * don't invalidate (and re-flush) unchanged screen regions every 500 ms. */
+static void label_set_if_changed(lv_obj_t *label, const char *text)
+{
+    if (strcmp(lv_label_get_text(label), text) != 0) lv_label_set_text(label, text);
+}
 
 /* --- helpers -------------------------------------------------------------- */
 
@@ -122,6 +132,11 @@ static void standby_apply(void)
 static void fire_go(void)
 {
     if (s_standby || s_asleep) return;
+    if (s_link_live) {
+        /* Linked: StageWizard owns the cue stack — just send GO. */
+        showlink_send_go();
+        return;
+    }
     if (s_cue + 1 < CUE_COUNT) {
         s_cue++;
     } else {
@@ -147,9 +162,28 @@ static void stby_clicked_cb(lv_event_t *e)
 
 static void row_clicked_cb(lv_event_t *e)
 {
-    s_cue = (int)(intptr_t)lv_event_get_user_data(e);
-    cue_apply();
+    int idx = (int)(intptr_t)lv_event_get_user_data(e);
+    if (s_link_live) {
+        char num[8];
+        snprintf(num, sizeof(num), "%d", CUES[idx].num);
+        showlink_send_fire_cue(num);
+    } else {
+        s_cue = idx;
+        cue_apply();
+    }
     lv_tileview_set_tile_by_index(s_tv, TILE_CUE, 0, LV_ANIM_ON);
+}
+
+static void stopall_clicked_cb(lv_event_t *e)
+{
+    (void)e;
+    showlink_send_stopall();
+}
+
+static void panic_clicked_cb(lv_event_t *e)
+{
+    (void)e;
+    showlink_send_panic();
 }
 
 static void fader_changed_cb(lv_event_t *e)
@@ -225,6 +259,48 @@ static void status_timer_cb(lv_timer_t *t)
         else lv_obj_add_flag(s_sleep_overlay, LV_OBJ_FLAG_HIDDEN);
     }
     s_prev_pwr = in.button_pwr;
+
+    /* --- StageWizard link: status dot + host-mirrored cue screen ---------- */
+    showlink_state_t link;
+    showlink_get_state(&link);
+    bool live = link.enabled && link.online;
+
+    lv_obj_set_style_bg_color(s_link_dot,
+        !link.enabled ? COL_LINE : (live ? COL_GO : COL_RED), 0);
+
+    if (live) {
+        char buf[96];
+        label_set_if_changed(s_cue_eyebrow, "STANDING BY");
+        label_set_if_changed(s_cue_num,
+            link.standing_by_number[0] ? link.standing_by_number : "-");
+        if (link.panicking) {
+            label_set_if_changed(s_cue_name, "PANIC - all stopped");
+            lv_obj_set_style_text_color(s_cue_name, COL_RED, 0);
+            lv_obj_set_style_text_color(s_cue_num, COL_RED, 0);
+        } else {
+            label_set_if_changed(s_cue_name,
+                link.standing_by_name[0] ? link.standing_by_name : "(no cue standing by)");
+            lv_obj_set_style_text_color(s_cue_name, COL_MUTED, 0);
+            lv_obj_set_style_text_color(s_cue_num, COL_TEXT, 0);
+        }
+        snprintf(buf, sizeof(buf), "RUNNING  %d", (int)link.running_count);
+        label_set_if_changed(s_cue_next, buf);
+        label_set_if_changed(s_cue_pos, "HOST");
+        s_link_live = true;
+    } else if (s_link_live) {
+        /* Dropped back to standalone: restore the local demo stack. */
+        s_link_live = false;
+        label_set_if_changed(s_cue_eyebrow, "LIVE CUE");
+        lv_obj_set_style_text_color(s_cue_name, COL_MUTED, 0);
+        lv_obj_set_style_text_color(s_cue_num, COL_TEXT, 0);
+        cue_apply();
+    }
+}
+
+static void link_tick_timer_cb(lv_timer_t *t)
+{
+    (void)t;
+    showlink_tick(lv_tick_get());
 }
 
 /* --- tiles ----------------------------------------------------------------- */
@@ -248,7 +324,7 @@ static void build_cue_tile(void)
     lv_obj_set_style_pad_row(t, 2, 0);
     lv_obj_set_scrollbar_mode(t, LV_SCROLLBAR_MODE_OFF);
 
-    lv_obj_t *eyebrow = make_label(t, &lv_font_montserrat_14, COL_AMBER, "LIVE CUE");
+    s_cue_eyebrow = make_label(t, &lv_font_montserrat_14, COL_AMBER, "LIVE CUE");
 
     s_cue_num = make_label(t, &lv_font_montserrat_48, COL_TEXT, "1");
 
@@ -294,8 +370,6 @@ static void build_cue_tile(void)
     lv_obj_add_event_cb(s_stby_btn, stby_clicked_cb, LV_EVENT_CLICKED, NULL);
 
     s_cue_pos = make_label(row, &lv_font_montserrat_14, COL_MUTED, "1 / 8");
-
-    (void)eyebrow;
 }
 
 static void build_cuelist_tile(void)
@@ -342,14 +416,14 @@ static void build_faders_tile(void)
 
     lv_obj_t *bank = lv_obj_create(t);
     lv_obj_remove_style_all(bank);
-    lv_obj_set_size(bank, LV_PCT(100), 330);
+    lv_obj_set_size(bank, LV_PCT(100), 284);
     lv_obj_set_flex_flow(bank, LV_FLEX_FLOW_ROW);
     lv_obj_set_flex_align(bank, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 
     for (int i = 0; i < 4; i++) {
         lv_obj_t *col = lv_obj_create(bank);
         lv_obj_remove_style_all(col);
-        lv_obj_set_size(col, 70, 330);
+        lv_obj_set_size(col, 70, 284);
         lv_obj_set_flex_flow(col, LV_FLEX_FLOW_COLUMN);
         lv_obj_set_flex_align(col, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
         lv_obj_set_style_pad_row(col, 10, 0);
@@ -358,7 +432,7 @@ static void build_faders_tile(void)
         lv_label_set_text_fmt(value, "%d", FADER_INIT[i]);
 
         lv_obj_t *slider = lv_slider_create(col);
-        lv_obj_set_size(slider, 30, 218);
+        lv_obj_set_size(slider, 30, 176);
         lv_slider_set_range(slider, 0, 100);
         lv_slider_set_value(slider, FADER_INIT[i], LV_ANIM_OFF);
         lv_obj_set_style_bg_color(slider, COL_SURFACE, LV_PART_MAIN);
@@ -369,6 +443,35 @@ static void build_faders_tile(void)
 
         make_label(col, &lv_font_montserrat_14, COL_MUTED, FADER_NAMES[i]);
     }
+
+    /* Transport row: host-wide controls (OSC to StageWizard when linked) */
+    lv_obj_t *transport = lv_obj_create(t);
+    lv_obj_remove_style_all(transport);
+    lv_obj_set_size(transport, LV_PCT(100), 46);
+    lv_obj_set_flex_flow(transport, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(transport, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+
+    lv_obj_t *stopall = lv_button_create(transport);
+    lv_obj_set_size(stopall, 150, 40);
+    lv_obj_set_style_radius(stopall, 20, 0);
+    lv_obj_set_style_bg_color(stopall, COL_SURFACE, 0);
+    lv_obj_set_style_border_width(stopall, 1, 0);
+    lv_obj_set_style_border_color(stopall, COL_AMBER, 0);
+    lv_obj_set_style_shadow_width(stopall, 0, 0);
+    lv_obj_t *sal = make_label(stopall, &lv_font_montserrat_14, COL_AMBER, "STOP ALL");
+    lv_obj_center(sal);
+    lv_obj_add_event_cb(stopall, stopall_clicked_cb, LV_EVENT_CLICKED, NULL);
+
+    lv_obj_t *panic = lv_button_create(transport);
+    lv_obj_set_size(panic, 150, 40);
+    lv_obj_set_style_radius(panic, 20, 0);
+    lv_obj_set_style_bg_color(panic, COL_SURFACE, 0);
+    lv_obj_set_style_border_width(panic, 1, 0);
+    lv_obj_set_style_border_color(panic, COL_RED, 0);
+    lv_obj_set_style_shadow_width(panic, 0, 0);
+    lv_obj_t *pal = make_label(panic, &lv_font_montserrat_14, COL_RED, "PANIC");
+    lv_obj_center(pal);
+    lv_obj_add_event_cb(panic, panic_clicked_cb, LV_EVENT_CLICKED, NULL);
 }
 
 static void build_setup_tile(void)
@@ -453,6 +556,15 @@ void showui_create(void)
     s_wifi_label = make_label(bar, &lv_font_montserrat_14, COL_TEXT, LV_SYMBOL_WIFI);
     lv_obj_align(s_wifi_label, LV_ALIGN_RIGHT_MID, -78, 0);
 
+    /* StageWizard link dot: gray = link off, red = searching, green = online */
+    s_link_dot = lv_obj_create(bar);
+    lv_obj_remove_style_all(s_link_dot);
+    lv_obj_set_size(s_link_dot, 8, 8);
+    lv_obj_set_style_radius(s_link_dot, LV_RADIUS_CIRCLE, 0);
+    lv_obj_set_style_bg_opa(s_link_dot, LV_OPA_COVER, 0);
+    lv_obj_set_style_bg_color(s_link_dot, COL_LINE, 0);
+    lv_obj_align(s_link_dot, LV_ALIGN_RIGHT_MID, -106, 0);
+
     /* Page dots on the top layer, bottom center */
     lv_obj_t *dots = lv_obj_create(lv_layer_top());
     lv_obj_remove_style_all(dots);
@@ -485,5 +597,8 @@ void showui_create(void)
 
     cue_apply();
     standby_apply();
+
+    showlink_init();
     lv_timer_create(status_timer_cb, 500, NULL);
+    lv_timer_create(link_tick_timer_cb, 100, NULL);
 }

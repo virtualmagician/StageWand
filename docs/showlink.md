@@ -1,0 +1,117 @@
+# showlink — the StageWand ↔ StageWizard link
+
+As-built protocol note for `Simulator/Sources/SimCore/showui/showlink.h` (the
+portable C interface StageWand's UI code calls; it compiles unchanged into
+both the macOS simulator and the ESP32-C6 firmware). Rides StageWizard's
+existing `dev`-branch (v1.5.x) remote hooks with no host changes required.
+
+## What showlink speaks today
+
+**Commands OUT** — OSC 1.0 over UDP, address-only messages (arguments, if
+any, are ignored by the host), default port **53100**:
+
+```
+/stagewizard/go
+/stagewizard/stopall
+/stagewizard/next
+/stagewizard/prev
+/stagewizard/toggle
+/stagewizard/panic
+/stagewizard/cue/<number>/fire   (number: no slashes)
+```
+
+**State IN** — two complementary paths:
+
+1. **HTTP `GET /status`**, polled at 2 Hz (500 ms), default port **53200**.
+   Always available against a real `dev`-branch host today; this is the
+   baseline path and needs no host changes.
+2. **Passive OSC status feedback ingest** — the PROPOSED extension written
+   up in [`docs/stagewizard-osc-requests.html`](stagewizard-osc-requests.html)
+   (P1: not yet on the `dev` branch). showlink listens on its own send
+   socket for `/stagewizard/status/standingby`, `/status/running`,
+   `/status/panic`, `/status/showmode` and applies them the instant they
+   arrive — no request round-trip.
+
+   showlink **automatically prefers OSC over HTTP the moment feedback
+   arrives**: as soon as any `/stagewizard/status/*` message is ingested,
+   it becomes the freshest source of truth for `online` and the visible
+   state, ahead of whatever the next scheduled HTTP poll would report. If
+   OSC feedback then goes quiet, the HTTP poll keeps `online` alive on its
+   own — the two paths are a fallback pair, not an either/or, so the host
+   team can ship the OSC extension whenever it's ready without breaking
+   anything in the meantime.
+
+   Keepalive: whenever the link is enabled, showlink sends
+   `/stagewand/ping` to the host once per second. On a host implementing
+   the extension this is what registers/renews the subscription; on
+   today's `dev` branch it's simply an address the OSC parser doesn't
+   recognize and drops silently, so it's safe to send unconditionally.
+
+## `showlink_state_t` fields
+
+| Field | Type | Meaning |
+|---|---|---|
+| `enabled` | `bool` | Link switched on by the operator |
+| `online` | `bool` | A good status (HTTP or OSC feedback) arrived within the last 2.5 s |
+| `standing_by_number` | `char[16]` | Cue number standing by; `""` when none/unknown |
+| `standing_by_name` | `char[64]` | Cue name standing by; `""` when none/unknown |
+| `running_count` | `int32_t` | Number of cues currently running |
+| `show_mode` | `bool` | Host is in show mode |
+| `panicking` | `bool` | Host is in a panic state |
+| `last_status_age_ms` | `uint32_t` | ms since the last good status; `UINT32_MAX` if never |
+
+## Timing
+
+| Interval | Value |
+|---|---|
+| `/stagewand/ping` keepalive | 1 s |
+| HTTP `/status` poll | 500 ms (2 Hz) |
+| `online` timeout | 2.5 s since the last good status |
+
+## Host-side ask
+
+The full, priority-ordered list of feedback StageWizard would need to add
+for StageWand to become a first-class remote (OSC status push, cue-context
+window, faders/discovery) lives in
+[`docs/stagewizard-osc-requests.html`](stagewizard-osc-requests.html). P1 of
+that list — OSC status feedback — is exactly what `--osc-feedback` on the
+mock below simulates ahead of the host shipping it.
+
+## Testing without a real host: the mock
+
+`tools/mock_stagewizard.py` (Python 3 stdlib only, no `pip install`)
+reproduces the StageWizard remote surface described above — OSC commands
+in, HTTP `/status` out, plus the proposed OSC feedback extension behind
+`--osc-feedback` (on by default) — so showlink's ingest path can be
+exercised end-to-end before the real host implements P1. It carries its own
+small hardcoded cue list and show state; it is not a StageWizard show file
+reader.
+
+```sh
+# run it standalone, defaults matching the real host's ports
+python3 tools/mock_stagewizard.py
+
+# non-default ports, feedback extension off (HTTP-poll-only behavior)
+python3 tools/mock_stagewizard.py --osc-port 55100 --http-port 55200 --no-osc-feedback
+
+# print the default /status JSON and exit, no servers started (for scripting)
+python3 tools/mock_stagewizard.py --once-status
+
+# demo/timed command injection
+python3 tools/mock_stagewizard.py --script "go@1.0,panic@3.0"
+```
+
+`tools/test_link.sh` drives the mock end-to-end against the built
+simulator: starts the mock on non-default ports 55100/55200, runs the
+headless `AmoledSim` binary with `--link 127.0.0.1 --link-ports
+55100,55200` and a synthetic tap on the GO button, then checks the mock's
+log for evidence of a subscribe, the `/stagewizard/go` fired by the tap,
+and status coming back (HTTP or OSC feedback), printing `PASS`/`FAIL` for
+each and exiting non-zero on any failure.
+
+```sh
+tools/test_link.sh
+```
+
+(This script assumes the simulator's `--link`/`--link-ports`/`--tap` flags
+are present; if they land after this doc, build the simulator first.)

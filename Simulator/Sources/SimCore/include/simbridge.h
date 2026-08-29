@@ -58,6 +58,22 @@ void sim_set_button(int32_t which, bool pressed);
 /* Device -> Swift ---------------------------------------------------------- */
 uint8_t sim_get_brightness(void); /* 0..255 as last set by the UI (DCS 0x51 equivalent) */
 
+/* StageWizard link (showlink) ---------------------------------------------- */
+typedef struct {
+    bool enabled;
+    bool online;
+    char standing_by_number[16];
+    char standing_by_name[64];
+    int32_t running_count;
+    bool show_mode;
+    bool panicking;
+    uint32_t last_status_age_ms;
+} sim_link_state_t;
+
+/* Configure the StageWizard link (host is dotted IPv4). */
+void sim_set_link(bool enabled, const char *host_ip, uint16_t osc_port, uint16_t http_port);
+void sim_get_link_state(sim_link_state_t *out);
+
 #ifdef __cplusplus
 }
 #endif

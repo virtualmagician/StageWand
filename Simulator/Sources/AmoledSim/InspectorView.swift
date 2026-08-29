@@ -23,6 +23,7 @@ struct InspectorView: View {
                 motionSection
                 connectivitySection
                 buttonsSection
+                stageWizardLinkSection
                 displaySection
                 honestySection
             }
@@ -106,6 +107,91 @@ struct InspectorView: View {
             }
             .padding(.top, 4)
         }
+    }
+
+    // MARK: - StageWizard Link
+
+    private var stageWizardLinkSection: some View {
+        GroupBox("StageWizard Link") {
+            VStack(alignment: .leading, spacing: 8) {
+                Toggle("Link to StageWizard", isOn: $engine.linkEnabled)
+
+                TextField("Host", text: $engine.linkHost)
+                    .textFieldStyle(.roundedBorder)
+                    .font(.system(.body, design: .monospaced))
+                    .disabled(engine.linkEnabled)
+
+                HStack(spacing: 12) {
+                    HStack(spacing: 4) {
+                        Text("OSC")
+                            .foregroundStyle(.secondary)
+                        TextField("53100", text: $engine.linkOSCPort)
+                            .textFieldStyle(.roundedBorder)
+                            .font(.system(.body, design: .monospaced))
+                            .frame(width: 60)
+                            .disabled(engine.linkEnabled)
+                    }
+                    HStack(spacing: 4) {
+                        Text("Status")
+                            .foregroundStyle(.secondary)
+                        TextField("53200", text: $engine.linkHTTPPort)
+                            .textFieldStyle(.roundedBorder)
+                            .font(.system(.body, design: .monospaced))
+                            .frame(width: 60)
+                            .disabled(engine.linkEnabled)
+                    }
+                }
+
+                linkStatusRows
+
+                Text("Commands: OSC → host. State: GET /status poll. Defaults match StageWizard (53100/53200).")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .padding(.top, 4)
+            }
+            .padding(.top, 4)
+        }
+    }
+
+    @ViewBuilder
+    private var linkStatusRows: some View {
+        let link = engine.linkState
+
+        HStack(spacing: 6) {
+            Circle()
+                .fill(linkStatusColor)
+                .frame(width: 8, height: 8)
+            Text(linkStatusText)
+                .monospacedDigit()
+                .foregroundStyle(.secondary)
+        }
+
+        if engine.linkEnabled && link.online {
+            statRow("SB", link.standingByNumber.isEmpty ? "—" : "\(link.standingByNumber)  \(link.standingByName)")
+            statRow("Running", "\(link.runningCount)")
+
+            if link.panicking {
+                HStack(spacing: 6) {
+                    Circle()
+                        .fill(Color.red)
+                        .frame(width: 8, height: 8)
+                    Text("PANIC")
+                        .monospacedDigit()
+                        .fontWeight(.bold)
+                        .foregroundStyle(.red)
+                }
+            }
+        }
+    }
+
+    private var linkStatusColor: Color {
+        guard engine.linkEnabled else { return .gray }
+        return engine.linkState.online ? .green : .red
+    }
+
+    private var linkStatusText: String {
+        guard engine.linkEnabled else { return "Off" }
+        return engine.linkState.online ? "Online" : "Searching…"
     }
 
     // MARK: - Display

@@ -15,6 +15,7 @@
 #include "simbridge.h"
 #include "showui/showui.h"
 #include "showui/showui_hal.h"
+#include "showui/showlink.h"
 
 /* 40 MHz QSPI, 4 data lines -> 20 MB/s peak (transfer only, no overhead) */
 #define QSPI_BYTES_PER_SEC (20.0 * 1000.0 * 1000.0)
@@ -205,6 +206,28 @@ void sim_set_button(int32_t which, bool pressed)
 }
 
 uint8_t sim_get_brightness(void) { return s_state.brightness; }
+
+/* StageWizard link --------------------------------------------------------- */
+
+void sim_set_link(bool enabled, const char *host_ip, uint16_t osc_port, uint16_t http_port)
+{
+    showlink_configure(host_ip, osc_port, http_port, enabled);
+}
+
+void sim_get_link_state(sim_link_state_t *out)
+{
+    if (!out) return;
+    showlink_state_t st;
+    showlink_get_state(&st);
+    out->enabled = st.enabled;
+    out->online = st.online;
+    memcpy(out->standing_by_number, st.standing_by_number, sizeof(out->standing_by_number));
+    memcpy(out->standing_by_name, st.standing_by_name, sizeof(out->standing_by_name));
+    out->running_count = st.running_count;
+    out->show_mode = st.show_mode;
+    out->panicking = st.panicking;
+    out->last_status_age_ms = st.last_status_age_ms;
+}
 
 /* showui_hal implementation (the Mac side of the portable HAL) ------------- */
 

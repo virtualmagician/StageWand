@@ -15,6 +15,22 @@ final class SimEngine: ObservableObject {
     @Published private(set) var brightness: Double = 1.0
     @Published private(set) var lvglFPS: Double = 0
 
+    // StageWizard link (OSC/UDP out, HTTP /status poll in). The port fields are Strings so
+    // they can back TextFields directly; applyLinkConfig() parses them on every change.
+    @Published var linkEnabled = false {
+        didSet { applyLinkConfig() }
+    }
+    @Published var linkHost = "127.0.0.1" {
+        didSet { applyLinkConfig() }
+    }
+    @Published var linkOSCPort = "53100" {
+        didSet { applyLinkConfig() }
+    }
+    @Published var linkHTTPPort = "53200" {
+        didSet { applyLinkConfig() }
+    }
+    @Published private(set) var linkState = LinkState()
+
     private var timer: Timer?
     private var started = false
     private var lastGeneration: UInt32 = 0
@@ -67,6 +83,13 @@ final class SimEngine: ObservableObject {
         // Brightness is device-controlled (the embedded UI can dim the panel at any time),
         // so it's refreshed every tick regardless of whether the framebuffer changed.
         brightness = Double(sim_get_brightness()) / 255.0
+
+        // Cheap struct copy; the StageWizard link status can change independently of the
+        // framebuffer (HTTP polling happens off the frame-generation clock), so refresh it
+        // every tick too.
+        var rawLinkState = sim_link_state_t()
+        sim_get_link_state(&rawLinkState)
+        linkState = LinkState(rawLinkState)
     }
 
     private func feedWallClock() {
@@ -115,5 +138,15 @@ final class SimEngine: ObservableObject {
 
     func setButton(_ which: Int32, pressed: Bool) {
         sim_set_button(which, pressed)
+    }
+
+    // MARK: - StageWizard link
+
+    /// Pushes the current link settings down to SimCore. Invalid port text falls back to
+    /// StageWizard's own defaults (53100 OSC / 53200 HTTP) rather than failing silently.
+    private func applyLinkConfig() {
+        let oscPort = UInt16(linkOSCPort) ?? 53100
+        let httpPort = UInt16(linkHTTPPort) ?? 53200
+        sim_set_link(linkEnabled, linkHost, oscPort, httpPort)
     }
 }

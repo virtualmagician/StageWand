@@ -9,6 +9,7 @@ idf_component_register(
         "main.c"
         "showui_hal_device.c"
         "${SHOWUI_DIR}/showui.c"
+        "${SHOWUI_DIR}/showlink.c"
     INCLUDE_DIRS
         "."
         "${SHOWUI_DIR}"
@@ -17,4 +18,7 @@ idf_component_register(
         esp_driver_gpio
         pcf85063a
         qmi8658
+        lwip
+        esp_wifi
+        esp_netif
 )

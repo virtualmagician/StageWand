@@ -173,7 +173,13 @@ static void sensor_poll_task(void *arg)
             }
         }
 
-        /* TODO: Wi-Fi is not brought up in this skeleton. */
+        /* TODO: Wi-Fi is not brought up in this skeleton. Once station mode is
+         * connected (esp_wifi + esp_netif, credentials via NVS/provisioning),
+         * set in.wifi_connected from the IP event, and enable the StageWizard
+         * link with:  showlink_configure("<host-ip>", SHOWLINK_DEFAULT_OSC_PORT,
+         * SHOWLINK_DEFAULT_HTTP_PORT, true);  (showlink.h — the same code the
+         * simulator runs; it uses lwIP BSD sockets and is ticked by ShowUI's
+         * own lv_timer, so no extra task is needed). */
         in.wifi_connected = false;
 
         if (s_rtc_ready) {

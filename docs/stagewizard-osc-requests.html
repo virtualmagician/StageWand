@@ -1,0 +1,161 @@
+<title>StageWand OSC Requests</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  :root {
+    --bg: #0b0d10;
+    --surface: #14181d;
+    --surface-2: #1b2129;
+    --line: #262d36;
+    --text: #e8eaed;
+    --muted: #9aa3ad;
+    --accent: #ffb454;
+    --go: #4ad66d;
+    --warn: #ff5c5c;
+    --p1-bg: #3a2c12; --p1-fg: #ffc879;
+    --p2-bg: #1c2c3a; --p2-fg: #7fc0f5;
+    --p3-bg: #1f2630; --p3-fg: #9aa3ad;
+  }
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) {
+      --bg: #f5f6f8; --surface: #ffffff; --surface-2: #eef0f3; --line: #d9dde3;
+      --text: #1a1d21; --muted: #5b636d; --accent: #b96f00; --go: #1f8a3d; --warn: #c22f2f;
+      --p1-bg: #fdeed3; --p1-fg: #8a5400;
+      --p2-bg: #ddeafd; --p2-fg: #1c5c96;
+      --p3-bg: #e7eaee; --p3-fg: #5b636d;
+    }
+  }
+  :root[data-theme="light"] {
+    --bg: #f5f6f8; --surface: #ffffff; --surface-2: #eef0f3; --line: #d9dde3;
+    --text: #1a1d21; --muted: #5b636d; --accent: #b96f00; --go: #1f8a3d; --warn: #c22f2f;
+    --p1-bg: #fdeed3; --p1-fg: #8a5400;
+    --p2-bg: #ddeafd; --p2-fg: #1c5c96;
+    --p3-bg: #e7eaee; --p3-fg: #5b636d;
+  }
+  * { box-sizing: border-box; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: "Source Sans 3", "Helvetica Neue", Arial, sans-serif;
+    font-size: 16.5px; line-height: 1.6; margin: 0; padding: 0 24px 96px;
+  }
+  main { max-width: 880px; margin: 0 auto; }
+  .eyebrow {
+    font-family: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+    font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--accent); margin: 0 0 10px;
+  }
+  header { padding: 56px 0 26px; border-bottom: 1px solid var(--line); }
+  h1 {
+    font-family: "Archivo", sans-serif; font-weight: 700;
+    font-size: clamp(30px, 4.6vw, 44px); line-height: 1.08; letter-spacing: -0.015em;
+    margin: 0 0 12px; text-wrap: balance;
+  }
+  .standfirst { color: var(--muted); max-width: 64ch; margin: 0; font-size: 17.5px; }
+  .standfirst strong { color: var(--text); font-weight: 600; }
+  h2 {
+    font-family: "Archivo", sans-serif; font-weight: 600; font-size: 23px;
+    letter-spacing: -0.01em; margin: 0 0 6px; text-wrap: balance;
+  }
+  section { padding: 40px 0 10px; border-bottom: 1px solid var(--line); }
+  section:last-of-type { border-bottom: none; }
+  p { max-width: 68ch; }
+  .lede { color: var(--muted); max-width: 68ch; margin-top: 0; }
+  code, .mono { font-family: "IBM Plex Mono", ui-monospace, Menlo, monospace; font-size: 0.86em; }
+  code { background: var(--surface-2); border: 1px solid var(--line); border-radius: 4px; padding: 1px 5px; white-space: nowrap; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover, a:focus-visible { text-decoration: underline; }
+  a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
+  .tablewrap { overflow-x: auto; margin: 18px 0; border: 1px solid var(--line); border-radius: 10px; }
+  table { border-collapse: collapse; width: 100%; min-width: 660px; font-size: 14.5px; }
+  th, td { text-align: left; padding: 9px 13px; vertical-align: top; }
+  thead th {
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 11px;
+    letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted);
+    font-weight: 500; background: var(--surface-2); border-bottom: 1px solid var(--line);
+  }
+  tbody tr { background: var(--surface); }
+  tbody tr + tr td { border-top: 1px solid var(--line); }
+  td.mono { white-space: nowrap; }
+  .pill {
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 10.5px;
+    letter-spacing: 0.08em; border-radius: 999px; padding: 2px 9px; white-space: nowrap;
+  }
+  .p1 { background: var(--p1-bg); color: var(--p1-fg); }
+  .p2 { background: var(--p2-bg); color: var(--p2-fg); }
+  .p3 { background: var(--p3-bg); color: var(--p3-fg); }
+  .note {
+    background: var(--surface); border-left: 3px solid var(--accent);
+    border-radius: 6px; padding: 12px 16px; margin: 18px 0; font-size: 15px; max-width: 72ch;
+  }
+  footer { padding-top: 32px; color: var(--muted); font-size: 13.5px; }
+</style>
+
+<main>
+<header>
+  <p class="eyebrow">Handoff · for the StageWizard team · August 29, 2026</p>
+  <h1>StageWand OSC Requests</h1>
+  <p class="standfirst"><strong>StageWand</strong> — the ESP32-C6 AMOLED hardware cue controller (<a href="https://github.com/virtualmagician/StageWand">repo</a>) — already drives StageWizard through the <code>dev</code>-branch OSC hooks with no host changes. This document lists the <strong>outbound OSC feedback</strong> that would make the wand a first-class surface: what to send, when, and why, in priority order. The wand's client side for every P1 item is already implemented and waiting.</p>
+</header>
+
+<section>
+  <p class="eyebrow">Baseline</p>
+  <h2>What dev already has (and StageWand already uses)</h2>
+  <p class="lede">Read from <span class="mono">OSCServer.swift</span> and <span class="mono">WebRemoteServer.swift</span> on <span class="mono">dev</span>.</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Surface</th><th>Direction</th><th>Details</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">OSC / UDP :53100</td><td>in → host</td><td><code>/stagewizard/go</code> · <code>/stopall</code> · <code>/next</code> · <code>/prev</code> · <code>/toggle</code> · <code>/panic</code> · <code>/stagewizard/cue/&lt;number&gt;/fire</code>. OSC 1.0, tags <code>i f s</code> parsed, bundles supported, address-only dispatch.</td></tr>
+      <tr><td class="mono">HTTP :53200</td><td>out ← host</td><td><code>GET /status</code> → <code>{standingByNumber, standingByName, notes, runningCount, showMode, panicking}</code> — StageWand v1 polls this at 2 Hz as its interim feedback path.</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section>
+  <p class="eyebrow">The ask</p>
+  <h2>Missing pieces, in priority order</h2>
+
+  <h2 style="font-size:17px; margin-top:26px;"><span class="pill p1">P1</span>&nbsp; OSC status feedback — replaces HTTP polling</h2>
+  <p class="lede">Everything <code>GET /status</code> already knows, pushed as OSC so a microcontroller doesn't need an HTTP client and gets sub-100 ms updates. Send <strong>on change</strong> plus a full refresh <strong>on subscribe</strong>.</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Address</th><th>Args</th><th>When</th><th>Notes</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">/stagewand/ping</td><td class="mono">(none)</td><td>wand → host, every 1 s</td><td>Implicit subscription + keepalive. Host records the datagram's source IP:port as a feedback target; drop targets silent for &gt;5 s. Unknown addresses are already ignored silently, so wands can ship this today.</td></tr>
+      <tr><td class="mono">/stagewizard/status/standingby</td><td class="mono">s number, s name</td><td>on change + on subscribe</td><td>Empty strings when nothing is standing by. This is the wand's home screen.</td></tr>
+      <tr><td class="mono">/stagewizard/status/running</td><td class="mono">i count</td><td>on change + on subscribe</td><td>The web remote's <code>runningCount</code>.</td></tr>
+      <tr><td class="mono">/stagewizard/status/panic</td><td class="mono">i 0|1</td><td>on change + on subscribe</td><td>Wand shows a hard red state; must never be stale.</td></tr>
+      <tr><td class="mono">/stagewizard/status/showmode</td><td class="mono">i 0|1</td><td>on change + on subscribe</td><td>Wand can lock its own editing surfaces in show mode.</td></tr>
+    </tbody>
+  </table></div>
+  <div class="note"><strong>Implementation note.</strong> Reply-to-sender needs no new socket or config: answer to the source address of any received datagram (NWConnection per-flow, as the listener already tracks). An OSC <em>encoder</em> is the only new code — the mirror of <span class="mono">parseMessage</span>, ~30 lines. StageWand's client side already listens on its send socket and ingests all five addresses; the moment the host transmits, wands go live with zero client changes.</div>
+
+  <h2 style="font-size:17px; margin-top:30px;"><span class="pill p2">P2</span>&nbsp; Cue context — what the wand shows around the playhead</h2>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Address</th><th>Args</th><th>When</th><th>Notes</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">/stagewizard/status/window</td><td class="mono">i index, i total, s prevNum, s prevName, s nextNum, s nextName</td><td>on change + on subscribe</td><td>A 3-cue window around the playhead beats a full cue-list dump: fits a 1.8″ screen, O(1) traffic, no sync protocol. (A full-list dump can come later if ever needed.)</td></tr>
+      <tr><td class="mono">/stagewizard/status/notes</td><td class="mono">s notes</td><td>on change + on subscribe</td><td>Already in <code>/status</code>; operators want the standing-by cue's notes on the wand.</td></tr>
+      <tr><td class="mono">/stagewizard/status/elapsed</td><td class="mono">f seconds, f duration</td><td>2 Hz while anything runs</td><td>Drives a progress bar. <code>duration ≤ 0</code> = indefinite (camera/loop).</td></tr>
+      <tr><td class="mono">/stagewizard/cue/&lt;number&gt;/select</td><td class="mono">(none)</td><td>wand → host</td><td><em>Command-side gap:</em> move the playhead / stand a cue by <em>without firing</em>. The wand's cue-list taps should arm, not fire.</td></tr>
+    </tbody>
+  </table></div>
+
+  <h2 style="font-size:17px; margin-top:30px;"><span class="pill p3">P3</span>&nbsp; Faders &amp; discovery — needs a product decision first</h2>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Item</th><th>Sketch</th><th>Open question</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">/stagewizard/level/&lt;target&gt;</td><td class="mono">f 0.0–1.0</td><td>The wand has 4 hardware submasters. What do they map to in StageWizard's model — master out, render layers, output groups, or tagged cue groups? Define the target vocabulary; the wand adapts.</td></tr>
+      <tr><td>Bonjour advertisement</td><td class="mono">_stagewizard._udp on :53100</td><td>Lets wands find the host with zero configuration — a big deal for hardware with no keyboard. NetService/NWListener advertising is a few lines.</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section>
+  <p class="eyebrow">Contract</p>
+  <h2>Ground rules both sides keep</h2>
+  <p>Plain OSC 1.0 messages, type tags limited to <code>i f s</code> (exactly what the dev-branch parser accepts today — the wand's parser mirrors it). No bundles required for feedback; each state item is its own message so a lost datagram only stales one field until the next change or subscribe-refresh. All feedback goes to every live subscriber; a subscriber is any source address heard from in the last 5 seconds. StageWand keeps HTTP <code>/status</code> polling as an automatic fallback whenever OSC feedback is absent, so the two can ship in either order.</p>
+</section>
+
+<footer>
+  <p>Grounded in StageWizard <span class="mono">dev</span> @ 2026-08-29 (<span class="mono">OSCServer.swift</span>, <span class="mono">WebRemoteServer.swift</span>, <span class="mono">ShowFile.swift</span> — default ports 53100/53200, both off by default) · StageWand client: <span class="mono">Simulator/Sources/SimCore/showui/showlink.[ch]</span> in <a href="https://github.com/virtualmagician/StageWand">virtualmagician/StageWand</a>.</p>
+</footer>
+</main>

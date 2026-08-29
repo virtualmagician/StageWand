@@ -1,6 +1,6 @@
 // Snapshot.swift — headless PNG snapshot mode.
 //
-//   AmoledSim --snapshot <outPath> [--frames N] [--tap x,y]
+//   AmoledSim --snapshot <outPath> [--frames N] [--tap x,y] [--link host] [--link-ports osc,http]
 //
 // No AppKit windows are created, so this works without a GUI session (e.g. over SSH or in
 // CI). `main.swift` routes here before any SwiftUI/App machinery is touched.
@@ -41,7 +41,29 @@ func runSnapshotMode(arguments: [String]) {
     let pressFrame = frameCount / 3
     let releaseFrame = min(pressFrame + 3, max(frameCount - 1, 0))
 
+    let linkHost = argumentValue(after: "--link", in: arguments)
+
+    var linkOSCPort: UInt16 = 53100
+    var linkHTTPPort: UInt16 = 53200
+    if let portsString = argumentValue(after: "--link-ports", in: arguments) {
+        let parts = portsString.split(separator: ",")
+        if parts.count == 2,
+           let osc = UInt16(parts[0].trimmingCharacters(in: .whitespaces)),
+           let http = UInt16(parts[1].trimmingCharacters(in: .whitespaces)) {
+            linkOSCPort = osc
+            linkHTTPPort = http
+        } else {
+            printStderr("warning: ignoring malformed --link-ports value '\(portsString)', expected osc,http")
+        }
+    }
+
     sim_init()
+
+    // Configure the StageWizard link before the frame loop starts so the very first
+    // sim_step() already reflects it.
+    if let linkHost {
+        sim_set_link(true, linkHost, linkOSCPort, linkHTTPPort)
+    }
 
     for frameIndex in 0..<frameCount {
         feedWallClock()
