@@ -350,13 +350,15 @@ static void build_cue_tile(void)
     lv_obj_center(s_go_label);
     lv_obj_add_event_cb(s_go_btn, go_clicked_cb, LV_EVENT_CLICKED, NULL);
 
-    /* STBY + position row */
+    /* STBY + position row. Height must fit the 40px pill INSIDE the padded
+     * content area — LVGL clips children to the parent, so an undersized row
+     * shaves the pill's bottom border. */
     lv_obj_t *row = lv_obj_create(t);
     lv_obj_remove_style_all(row);
-    lv_obj_set_size(row, 320, 48);
+    lv_obj_set_size(row, 320, 60);
     lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
     lv_obj_set_flex_align(row, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_pad_top(row, 10, 0);
+    lv_obj_set_style_pad_top(row, 14, 0);
 
     s_stby_btn = lv_button_create(row);
     lv_obj_set_size(s_stby_btn, 110, 40);
