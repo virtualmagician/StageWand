@@ -1,0 +1,428 @@
+<title>AMOLED Show Controller</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  :root {
+    --bg: #0b0d10;
+    --surface: #14181d;
+    --surface-2: #1b2129;
+    --line: #262d36;
+    --text: #e8eaed;
+    --muted: #9aa3ad;
+    --accent: #ffb454;
+    --accent-ink: #0b0d10;
+    --go: #4ad66d;
+    --warn: #ff5c5c;
+    --chip-done-bg: #14351f;
+    --chip-done-fg: #6fe392;
+    --chip-now-bg: #3a2c12;
+    --chip-now-fg: #ffc879;
+    --chip-later-bg: #1f2630;
+    --chip-later-fg: #9aa3ad;
+  }
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) {
+      --bg: #f5f6f8;
+      --surface: #ffffff;
+      --surface-2: #eef0f3;
+      --line: #d9dde3;
+      --text: #1a1d21;
+      --muted: #5b636d;
+      --accent: #b96f00;
+      --accent-ink: #ffffff;
+      --go: #1f8a3d;
+      --warn: #c22f2f;
+      --chip-done-bg: #ddf3e4;
+      --chip-done-fg: #176b33;
+      --chip-now-bg: #fdeed3;
+      --chip-now-fg: #8a5400;
+      --chip-later-bg: #e7eaee;
+      --chip-later-fg: #5b636d;
+    }
+  }
+  :root[data-theme="light"] {
+    --bg: #f5f6f8;
+    --surface: #ffffff;
+    --surface-2: #eef0f3;
+    --line: #d9dde3;
+    --text: #1a1d21;
+    --muted: #5b636d;
+    --accent: #b96f00;
+    --accent-ink: #ffffff;
+    --go: #1f8a3d;
+    --warn: #c22f2f;
+    --chip-done-bg: #ddf3e4;
+    --chip-done-fg: #176b33;
+    --chip-now-bg: #fdeed3;
+    --chip-now-fg: #8a5400;
+    --chip-later-bg: #e7eaee;
+    --chip-later-fg: #5b636d;
+  }
+  * { box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Source Sans 3", "Helvetica Neue", Arial, sans-serif;
+    font-size: 16.5px;
+    line-height: 1.6;
+    margin: 0;
+    padding: 0 24px 96px;
+  }
+  main { max-width: 880px; margin: 0 auto; }
+  .eyebrow {
+    font-family: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+    font-size: 12px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin: 0 0 10px;
+  }
+  header { padding: 64px 0 28px; border-bottom: 1px solid var(--line); }
+  h1 {
+    font-family: "Archivo", "Helvetica Neue", sans-serif;
+    font-weight: 700;
+    font-size: clamp(34px, 5.2vw, 52px);
+    line-height: 1.05;
+    letter-spacing: -0.015em;
+    margin: 0 0 14px;
+    text-wrap: balance;
+  }
+  .standfirst { color: var(--muted); max-width: 62ch; margin: 0; font-size: 18px; }
+  .standfirst strong { color: var(--text); font-weight: 600; }
+  h2 {
+    font-family: "Archivo", "Helvetica Neue", sans-serif;
+    font-weight: 600;
+    font-size: 25px;
+    letter-spacing: -0.01em;
+    margin: 0 0 6px;
+    text-wrap: balance;
+  }
+  h3 {
+    font-family: "Archivo", "Helvetica Neue", sans-serif;
+    font-weight: 600;
+    font-size: 18px;
+    margin: 26px 0 8px;
+  }
+  section { padding: 44px 0 8px; border-bottom: 1px solid var(--line); }
+  section:last-of-type { border-bottom: none; }
+  p { max-width: 68ch; }
+  .lede { color: var(--muted); max-width: 68ch; margin-top: 0; }
+  code, .mono {
+    font-family: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+    font-size: 0.86em;
+  }
+  code {
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 1px 5px;
+    white-space: nowrap;
+  }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover, a:focus-visible { text-decoration: underline; }
+  a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
+
+  .decisions {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 12px;
+    margin: 26px 0 10px;
+  }
+  .decision {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 16px 18px;
+  }
+  .decision .k {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 6px;
+  }
+  .decision .v { font-weight: 600; }
+  .decision .why { color: var(--muted); font-size: 14px; margin-top: 4px; }
+
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 12px;
+    margin: 22px 0;
+  }
+  .stat {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 16px 18px;
+  }
+  .stat .n {
+    font-family: "Archivo", sans-serif;
+    font-weight: 700;
+    font-size: 30px;
+    letter-spacing: -0.01em;
+    font-variant-numeric: tabular-nums;
+  }
+  .stat .n span.unit { font-size: 16px; font-weight: 600; color: var(--muted); }
+  .stat .l { color: var(--muted); font-size: 13.5px; line-height: 1.45; margin-top: 4px; }
+
+  .tablewrap { overflow-x: auto; margin: 18px 0; border: 1px solid var(--line); border-radius: 10px; }
+  table { border-collapse: collapse; width: 100%; min-width: 640px; font-size: 15px; }
+  th, td { text-align: left; padding: 10px 14px; vertical-align: top; }
+  thead th {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 11.5px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    font-weight: 500;
+    background: var(--surface-2);
+    border-bottom: 1px solid var(--line);
+  }
+  tbody tr { background: var(--surface); }
+  tbody tr + tr td { border-top: 1px solid var(--line); }
+  td.mono { white-space: nowrap; }
+
+  .arch {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0;
+    margin: 24px 0 8px;
+    max-width: 640px;
+  }
+  .arch .layer {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 14px 18px;
+  }
+  .arch .layer.shared { border-color: var(--accent); }
+  .arch .layer .t { font-weight: 600; }
+  .arch .layer .t .mono { color: var(--accent); }
+  .arch .layer .d { color: var(--muted); font-size: 14px; }
+  .arch .split { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .arch .down {
+    text-align: center;
+    color: var(--muted);
+    font-size: 13px;
+    padding: 6px 0;
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+  }
+  @media (max-width: 560px) { .arch .split { grid-template-columns: 1fr; } }
+
+  ol.phases { list-style: none; margin: 24px 0; padding: 0; display: grid; gap: 12px; }
+  ol.phases li {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 16px 18px 14px;
+    position: relative;
+  }
+  .phase-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+  .phase-num {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    color: var(--accent);
+    font-size: 13px;
+  }
+  .phase-title { font-weight: 600; font-size: 17px; font-family: "Archivo", sans-serif; }
+  .chip {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 10.5px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    border-radius: 999px;
+    padding: 3px 10px;
+    margin-left: auto;
+  }
+  .chip.done { background: var(--chip-done-bg); color: var(--chip-done-fg); }
+  .chip.now { background: var(--chip-now-bg); color: var(--chip-now-fg); }
+  .chip.later { background: var(--chip-later-bg); color: var(--chip-later-fg); }
+  ol.phases li p { color: var(--muted); font-size: 14.5px; margin: 8px 0 0; max-width: none; }
+
+  ul.quirks { margin: 18px 0; padding: 0; list-style: none; display: grid; gap: 10px; }
+  ul.quirks li {
+    background: var(--surface);
+    border-left: 3px solid var(--warn);
+    border-radius: 6px;
+    padding: 10px 16px;
+    font-size: 15px;
+  }
+  ul.quirks li strong { display: block; }
+  ul.quirks li span { color: var(--muted); font-size: 14px; }
+
+  footer { padding-top: 36px; color: var(--muted); font-size: 13.5px; }
+  footer a { color: var(--muted); text-decoration: underline; }
+</style>
+
+<main>
+<header>
+  <p class="eyebrow">Project plan · August 29, 2026</p>
+  <h1>AMOLED Show Controller</h1>
+  <p class="standfirst">Turning a handful of <strong>Waveshare ESP32-C6-Touch-AMOLED-1.8</strong> boards (SKU 33305) into HMI show controllers — starting with a <strong>native macOS simulator</strong> that runs the exact same LVGL C code the boards will run, so graphics and interactions are designed and tested on the Mac and flashed to hardware unchanged.</p>
+</header>
+
+<section>
+  <p class="eyebrow">Decisions</p>
+  <h2>The four calls that shape everything</h2>
+  <div class="decisions">
+    <div class="decision">
+      <div class="k">UI engine</div>
+      <div class="v">LVGL v9.5.0 (MIT)</div>
+      <div class="why">Current stable. Waveshare's official BSP accepts LVGL ≥8 &lt;10, so v9 runs on the boards too — one codebase, two targets.</div>
+    </div>
+    <div class="decision">
+      <div class="k">Simulator</div>
+      <div class="v">Native SwiftUI app</div>
+      <div class="why">LVGL compiled into a Swift package, rendering into a CoreGraphics-backed view. No SDL, no Xcode required — builds with <span class="mono">swift build</span>.</div>
+    </div>
+    <div class="decision">
+      <div class="k">Shared UI layer</div>
+      <div class="v">Portable C target <span class="mono">ShowUI</span></div>
+      <div class="why">Screens are written once against LVGL + a tiny HAL (inputs snapshot + brightness). The Mac implements the HAL with sliders; the board implements it with real chips.</div>
+    </div>
+    <div class="decision">
+      <div class="k">Firmware base</div>
+      <div class="v">Official Waveshare BSP</div>
+      <div class="why"><span class="mono">waveshare/esp32_c6_touch_amoled_1_8</span> on ESP-IDF ≥5.5 — auto-detects the V1/V2 hardware revision at runtime.</div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <p class="eyebrow">Hardware · verified</p>
+  <h2>What SKU 33305 actually is</h2>
+  <p class="lede">Every row below was gathered from the Waveshare docs and then adversarially re-verified against primary sources (Waveshare docs, the official GitHub repos, Espressif datasheets). One agent claim was caught and corrected in review: the shared I2C bus is GPIO7/GPIO8, not GPIO18/19.</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Subsystem</th><th>Part</th><th>Notes</th></tr></thead>
+    <tbody>
+      <tr><td>MCU</td><td class="mono">ESP32-C6</td><td>Single-core RISC-V @ 160 MHz · Wi-Fi 6, BLE 5, 802.15.4 (Zigbee/Thread) · plus 20 MHz LP core</td></tr>
+      <tr><td>Memory</td><td class="mono">512 KB HP SRAM · 16 MB flash</td><td><strong>No PSRAM</strong> — the C6 has no PSRAM interface at all. This is the defining graphics constraint.</td></tr>
+      <tr><td>Display</td><td class="mono">1.8″ AMOLED · 368 × 448</td><td>QSPI bus · V1 boards: SH8601 driver · V2 boards: CO5300 · 16.7M colors, driven as RGB565</td></tr>
+      <tr><td>Touch</td><td class="mono">FT3168 (V1) / CST820 (V2)</td><td>I2C · V1 at 0x38, V2 at 0x15 (this address is how the BSP detects the revision) · 60 Hz sampling</td></tr>
+      <tr><td>Motion</td><td class="mono">QMI8658</td><td>6-axis IMU: 3-axis accelerometer + 3-axis gyroscope</td></tr>
+      <tr><td>Clock</td><td class="mono">PCF85063A</td><td>RTC with battery backup via the PMU</td></tr>
+      <tr><td>Audio</td><td class="mono">ES8311</td><td>Codec with onboard microphone and speaker</td></tr>
+      <tr><td>Power</td><td class="mono">AXP2101</td><td>PMU: charging + rails · MX1.25 connector for a 3.7 V LiPo (3.85 × 24 × 28 mm recommended)</td></tr>
+      <tr><td>I/O</td><td class="mono">TCA9554</td><td>IO expander (display/touch reset lines) · shared I2C bus on GPIO7 (SCL) / GPIO8 (SDA), per the BSP header — always use <code>bsp_i2c_get_handle()</code> rather than pin numbers</td></tr>
+      <tr><td>Storage</td><td class="mono">microSD (SPI)</td><td>Shares SPI2 with the display — <strong>display and SD card cannot run concurrently</strong></td></tr>
+      <tr><td>Misc</td><td class="mono">USB-C · BOOT + PWR buttons</td><td>I2C / UART / USB broken out on solder pads</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section>
+  <p class="eyebrow">Constraints</p>
+  <h2>The performance envelope, in numbers</h2>
+  <p class="lede">These numbers decide what a show-controller UI on this board can look like — and the simulator surfaces them live, so a design that will stutter on hardware is caught on the Mac.</p>
+  <div class="stats">
+    <div class="stat">
+      <div class="n">322<span class="unit"> KB</span></div>
+      <div class="l">One full 368×448 RGB565 frame — 63% of all SRAM. A full framebuffer is barely possible; a double buffer is physically impossible.</div>
+    </div>
+    <div class="stat">
+      <div class="n">368×100<span class="unit"> px</span></div>
+      <div class="l">The BSP's actual default: a single ~72 KB partial draw buffer covering 22% of the screen per pass.</div>
+    </div>
+    <div class="stat">
+      <div class="n">~16.5<span class="unit"> ms</span></div>
+      <div class="l">Best-case full-frame push over QSPI at 40 MHz (20 MB/s) — a ~60 fps ceiling before any rendering or radio work.</div>
+    </div>
+    <div class="stat">
+      <div class="n">0.16<span class="unit"> ms</span></div>
+      <div class="l">Cost of updating a 40×40 px widget. Partial, dirty-rect updates are effectively free — full-screen animation is not.</div>
+    </div>
+  </div>
+  <p>Design consequence: build screens from <strong>small, independently-updating widgets</strong> (meters, clocks, cue numbers, status chips) on stable backgrounds. Avoid full-screen transitions and large animated regions; one 160 MHz core runs LVGL, touch, and the Wi-Fi/BLE/Zigbee stack all at once.</p>
+</section>
+
+<section>
+  <p class="eyebrow">Architecture</p>
+  <h2>One UI codebase, two machines</h2>
+  <div class="arch">
+    <div class="layer shared">
+      <div class="t"><span class="mono">ShowUI</span> — portable LVGL C code</div>
+      <div class="d">Screens, styles, interactions. Depends only on LVGL and <span class="mono">showui_hal.h</span> (battery, clock, IMU, buttons, brightness, connectivity). Never touches an OS.</div>
+    </div>
+    <div class="down">▲ compiled into both ▼</div>
+    <div class="split">
+      <div class="layer">
+        <div class="t">macOS · <span class="mono">AmoledSim.app</span></div>
+        <div class="d">SwiftUI shell + <span class="mono">SimBridge</span> C glue: LVGL flushes into a CGImage-backed 368×448 canvas, mouse becomes touch, side panel fakes battery/RTC/IMU/buttons. Reproduces device quirks: single 368×100 draw buffer, even-coordinate flush rounding, DCS 0x51 brightness.</div>
+      </div>
+      <div class="layer">
+        <div class="t">Board · ESP-IDF firmware</div>
+        <div class="d">Official BSP (<span class="mono">esp32_c6_touch_amoled_1_8</span>) + a thin HAL implementation over AXP2101 / PCF85063 / QMI8658. Same <span class="mono">ShowUI</span> sources referenced from the ESP-IDF project.</div>
+      </div>
+    </div>
+  </div>
+  <h3>What the simulator gives you beyond pixels</h3>
+  <p>A live <strong>device-honesty readout</strong>: every LVGL flush is measured (area, bytes), and the panel shows what that frame would cost on real hardware at 20 MB/s QSPI — estimated flush time and achievable fps — plus an optional overlay outlining the dirty rectangles being redrawn. Screenshot export for design review. The Mac never lies to you about what the C6 can do.</p>
+</section>
+
+<section>
+  <p class="eyebrow">Roadmap</p>
+  <h2>Phases</h2>
+  <ol class="phases">
+    <li>
+      <div class="phase-head"><span class="phase-num">01</span><span class="phase-title">Research &amp; verification</span><span class="chip done">Done</span></div>
+      <p>11-agent research fleet over Waveshare docs, official repos, community GitHub, LVGL 9.5 API, and Espressif datasheets; 5 adversarial fact-checkers confirmed the hardware profile (and corrected the I2C pin claim).</p>
+    </li>
+    <li>
+      <div class="phase-head"><span class="phase-num">02</span><span class="phase-title">Native macOS simulator</span><span class="chip now">In progress</span></div>
+      <p>Swift package: vendored LVGL 9.5.0 + SimBridge + SwiftUI device window with peripherals panel, flush instrumentation, and PNG snapshots. Ships as <span class="mono">AmoledSim.app</span>; builds with <span class="mono">swift build</span> alone.</p>
+    </li>
+    <li>
+      <div class="phase-head"><span class="phase-num">03</span><span class="phase-title">Show-controller UI</span><span class="chip now">In progress</span></div>
+      <p>First ShowUI screens in portable C: cue screen (big GO / STANDBY), cue list, faders page, settings with brightness — dark, AMOLED-black theme with amber accents, built from small-region widgets per the performance envelope.</p>
+    </li>
+    <li>
+      <div class="phase-head"><span class="phase-num">04</span><span class="phase-title">Firmware bring-up</span><span class="chip later">Next</span></div>
+      <p>ESP-IDF 5.5 project skeleton referencing the same ShowUI sources via the official BSP; flash to a board, validate V1/V2 auto-detect, measure real fps against the simulator's estimates.</p>
+    </li>
+    <li>
+      <div class="phase-head"><span class="phase-num">05</span><span class="phase-title">Show-control integration</span><span class="chip later">Next</span></div>
+      <p>Make it a real show controller: Wi-Fi 6 + OSC (or MIDI-over-BLE) cue transport to the show system, multi-device roles (GO surface, fader wing, status display), and a simulator mode that mirrors several virtual devices at once.</p>
+    </li>
+  </ol>
+</section>
+
+<section>
+  <p class="eyebrow">Community</p>
+  <h2>Code worth borrowing</h2>
+  <p class="lede">The C6 board and its ESP32-S3 sibling share the identical panel and touch parts, so S3-board code ports with pin changes only. Most useful finds, ranked:</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Repo</th><th>What it is</th><th>Why it matters here</th><th>License</th></tr></thead>
+    <tbody>
+      <tr><td class="mono"><a href="https://github.com/waveshareteam/ESP32-C6-Touch-AMOLED-1.8">waveshareteam/ESP32-C6-Touch-AMOLED-1.8</a></td><td>Official product repo</td><td>7 ESP-IDF examples + 23 Arduino sketches; the canonical starting point, active (Aug 2026)</td><td>Apache-2.0</td></tr>
+      <tr><td class="mono"><a href="https://github.com/waveshareteam/Waveshare-ESP32-components">waveshareteam/Waveshare-ESP32-components</a></td><td>BSP source</td><td>The exact LVGL config, flush rounding, brightness command, reset sequencing the simulator mirrors</td><td>Apache-2.0</td></tr>
+      <tr><td class="mono"><a href="https://github.com/chayuto/ESP32-C6-Touch-AMOLED-1.8">chayuto/ESP32-C6-Touch-AMOLED-1.8</a></td><td>Community firmware collection, this exact board</td><td>8 working examples (canvas, audio DSP, gestures, BLE); documents the no-PSRAM and shared-SPI2 quirks; pushed Aug 28 2026</td><td>MIT</td></tr>
+      <tr><td class="mono"><a href="https://github.com/espressif/esp-brookesia">espressif/esp-brookesia</a></td><td>Espressif HMI/app-shell framework</td><td>Ready-made launcher + gesture nav + status bar to host show-controller "apps"; 773★; already ported to a sibling Waveshare AMOLED</td><td>Apache-2.0</td></tr>
+      <tr><td class="mono"><a href="https://github.com/waveshareteam/ESP32-S3-Touch-AMOLED-1.8">waveshareteam/ESP32-S3-Touch-AMOLED-1.8</a></td><td>Official sibling-board repo</td><td>Same SH8601 + FT3168 hardware; most-starred in the family (41★); display/touch code ports directly</td><td>Apache-2.0</td></tr>
+      <tr><td class="mono"><a href="https://github.com/markphelps/bop-esp32">markphelps/bop-esp32</a></td><td>Spotify remote on the sibling board</td><td>Complete worked example of touch UI + networking on identical display hardware</td><td>Apache-2.0</td></tr>
+      <tr><td class="mono"><a href="https://github.com/Makerfabs/MaTouch-ESP32-S3-AMOLED-with-Touch-1.8-FT3168">Makerfabs/MaTouch-…-1.8-FT3168</a></td><td>Same panel+touch combo, Arduino</td><td>5 touch-HMI demos incl. a Squareline Studio project and a drawing app</td><td>none — reference only</td></tr>
+      <tr><td class="mono"><a href="https://github.com/Kolo-Naukowe-Informatykow-UR/WatchUR">Kolo-Naukowe-Informatykow-UR/WatchUR</a></td><td>LVGL 9 smartwatch firmware</td><td>Same touch IC, IMU, RTC, PMU on ESP-IDF + LVGL 9 — reusable sensor/touch patterns</td><td>none — reference only</td></tr>
+      <tr><td class="mono"><a href="https://github.com/genki-robotics/esp_lcd_touch_ft3168">genki-robotics/esp_lcd_touch_ft3168</a></td><td>Standalone FT3168 component</td><td>License-clean drop-in touch driver if we ever bypass the BSP</td><td>Apache-2.0</td></tr>
+      <tr><td class="mono"><a href="https://github.com/nerveband/esp-flower">nerveband/esp-flower</a></td><td>Touch + mic animation on this exact board</td><td>Proof of sensor-driven interaction (blow into the mic) on the C6 board itself</td><td>none — reference only</td></tr>
+    </tbody>
+  </table></div>
+  <p>Notably absent from the ecosystem: any desktop simulator for this board, and any native-macOS LVGL embedding at all (LVGL's own PC simulators are SDL windows). The simulator built here is new ground.</p>
+</section>
+
+<section>
+  <p class="eyebrow">Risks</p>
+  <h2>Quirks that will bite if forgotten</h2>
+  <ul class="quirks">
+    <li><strong>Two hardware revisions in the wild.</strong><span>Your "handful of boards" may mix V1 (SH8601/FT3168) and V2 (CO5300/CST820). Always go through the BSP's auto-detect; never hardcode a revision. Run the official <code>00_board_check</code> example on each board on arrival.</span></li>
+    <li><strong>Display and microSD are mutually exclusive.</strong><span>Both sit on the C6's single SPI2. Cue/show data that must be read mid-show belongs in the 16 MB flash (or over Wi-Fi), not on SD.</span></li>
+    <li><strong>Flush areas must start/end on even x coordinates.</strong><span>A documented SH8601/CO5300 QSPI requirement; the BSP rounds every flush rect. The simulator reproduces this so 1-px-off artifacts show up on the Mac first.</span></li>
+    <li><strong>No PSRAM, one core, three radios.</strong><span>512 KB SRAM holds LVGL, the draw buffer, Wi-Fi 6/BLE stacks, and app state together. Budget RAM per screen; prefer many small widgets over canvases.</span></li>
+    <li><strong>Brightness is a panel command, not a backlight PWM.</strong><span>AMOLED brightness = MIPI-DCS command <code>0x51</code> (0–255). The HAL abstracts it; the simulator dims its canvas to match.</span></li>
+    <li><strong>Wiki pages block bots.</strong><span><code>waveshare.com/wiki</code> returns 403 to scripted fetches; <code>docs.waveshare.com</code> is the reliable mirror, and schematics/pinouts live in PDFs under <code>files.waveshare.com</code>.</span></li>
+  </ul>
+</section>
+
+<footer>
+  <p>Primary sources: <a href="https://docs.waveshare.com/ESP32-C6-Touch-AMOLED-1.8">Waveshare board docs</a> · <a href="https://github.com/waveshareteam/ESP32-C6-Touch-AMOLED-1.8">official product repo</a> · <a href="https://components.espressif.com/components/waveshare/esp32_c6_touch_amoled_1_8">BSP on the component registry</a> · <a href="https://docs.lvgl.io/master/main-modules/display/setup.html">LVGL 9 display docs</a> · <a href="https://documentation.espressif.com/esp32-c6_datasheet_en.html">ESP32-C6 datasheet</a> · <a href="https://docs.espressif.com/projects/esp-faq/en/latest/software-framework/storage/psram.html">Espressif PSRAM FAQ</a></p>
+</footer>
+</main>

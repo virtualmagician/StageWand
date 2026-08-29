@@ -1,0 +1,16 @@
+# Dependency versions mirror the official Waveshare examples exactly:
+#   examples/esp-idf/05_LVGL_WITH_RAM/main/idf_component.yml (BSP)
+#   examples/esp-idf/02_PCF85063/main/idf_component.yml       (RTC)
+#   examples/esp-idf/04_QMI8658/main/idf_component.yml        (IMU)
+# from github.com/waveshareteam/ESP32-C6-Touch-AMOLED-1.8, fetched 2026-08-29.
+version: "1.0.0"
+dependencies:
+  idf: ">=5.5"
+  waveshare/esp32_c6_touch_amoled_1_8:
+    version: "^1.0.0"
+  waveshare/pcf85063a:
+    version: "^2.0.0"
+    public: true
+  waveshare/qmi8658:
+    version: "^2.0.0"
+    public: true

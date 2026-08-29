@@ -1,0 +1,13 @@
+# macOS
+.DS_Store
+
+# SwiftPM build artifacts
+.build/
+.swiftpm/
+Simulator/dist/
+
+# ESP-IDF build artifacts
+firmware/showcontroller/build/
+firmware/showcontroller/managed_components/
+firmware/showcontroller/dependencies.lock
+firmware/showcontroller/sdkconfig.old
