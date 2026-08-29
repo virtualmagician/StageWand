@@ -65,6 +65,15 @@ func runSnapshotMode(arguments: [String]) {
         sim_set_link(true, linkHost, linkOSCPort, linkHTTPPort)
     }
 
+    // --tile N: capture a specific page (0 cues, 1 GO, 2 faders, 3 setup).
+    if let tileString = argumentValue(after: "--tile", in: arguments) {
+        if let tile = Int32(tileString), (0...3).contains(tile) {
+            sim_goto_tile(tile)
+        } else {
+            printStderr("warning: ignoring malformed --tile value '\(tileString)', expected 0-3")
+        }
+    }
+
     for frameIndex in 0..<frameCount {
         feedWallClock()
 

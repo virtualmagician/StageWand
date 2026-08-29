@@ -115,3 +115,23 @@ tools/test_link.sh
 
 (This script assumes the simulator's `--link`/`--link-ports`/`--tap` flags
 are present; if they land after this doc, build the simulator first.)
+
+## Update — StageWizard dev D21 (same day)
+
+The host shipped P1+P2 feedback and `/cue/{number}/select`; showlink now
+ingests the full set: `standingby`, `running`, `panic`, `showmode`,
+`window` (i,i,s,s,s,s), `notes` (s), `elapsed` (f elapsed, f duration;
+duration < 0 = indefinite). New API: `showlink_send_select_cue()`. The
+cues page shows the host GO-sequence window (tap PREV/NEXT to arm via
+select); the GO page gains a progress bar; the setup page shows network +
+OSC health (transport, status age, host, show mode).
+
+Freshness: OSC feedback is change-only (elapsed streams only while
+something runs), so OSC staleness allows 10 s before falling back to HTTP
+(2.5 s); a host-side idle heartbeat has been requested to shrink this.
+macOS note: sockets set `SO_NOSIGPIPE` — a refused `/status` connect
+otherwise kills the process via SIGPIPE (lwIP has no SIGPIPE).
+
+Headless: `--tile N` (0 cues / 1 GO / 2 faders / 3 setup) captures any
+page; the mock now also pushes window/notes and a 30 s demo elapsed
+stream.

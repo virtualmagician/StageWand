@@ -14,6 +14,10 @@ extern "C" {
 
 void showui_create(void);
 
+/* Jump to a tile: 0 = cues, 1 = GO, 2 = faders, 3 = setup. Out-of-range is
+ * ignored. Used by the simulator's headless screenshot mode. */
+void showui_goto_tile(int index);
+
 #ifdef __cplusplus
 }
 #endif

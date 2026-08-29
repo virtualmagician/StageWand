@@ -98,6 +98,12 @@
 </header>
 
 <section>
+  <p class="eyebrow">Status · updated later on August 29, 2026</p>
+  <h2>Most of this shipped same-day</h2>
+  <div class="note"><strong>StageWizard <span class="mono">dev</span> D21 implemented P1 and P2 in full</strong> — all five status addresses with reply-to-sender subscription (10 Hz change-diff, elapsed while running), <code>/cue/{number}/select</code>, and Bonjour (<code>_stagewizard._udp</code>) from P3. StageWand ingests all of it as of the same day. <strong>Two asks remain:</strong> (1) <em>new since testing against the real cadence:</em> a low-rate <strong>status heartbeat</strong> (~every 2 s, e.g. re-send <code>/stagewizard/status/running</code>) — feedback is change-only, so with the web remote off a quiet-but-alive host is indistinguishable from a dead one; StageWand currently bridges this with a 10 s grace window before reporting the link lost. One line in the existing 10 Hz tick. (2) The P3 <strong>fader mapping</strong> product decision below.</div>
+</section>
+
+<section>
   <p class="eyebrow">Baseline</p>
   <h2>What dev already has (and StageWand already uses)</h2>
   <p class="lede">Read from <span class="mono">OSCServer.swift</span> and <span class="mono">WebRemoteServer.swift</span> on <span class="mono">dev</span>.</p>

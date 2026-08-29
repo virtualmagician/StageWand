@@ -88,6 +88,13 @@ CUES = [
 ]
 DEFAULT_INDEX = 2  # cue "3" -- matches the /status example in the spec
 RUNNING_CAP = 8
+
+# Demo notes for the P2 /stagewizard/status/notes feedback.
+NOTES = {
+    "3": "Followspot pickup stage left. Wait for applause to settle.",
+    "4": "Video wall: confirm HDMI 2 live before GO.",
+}
+DEMO_CUE_DURATION = 30.0  # seconds; drives the P2 elapsed stream
 PANIC_CLEAR_SECS = 3.0
 SUBSCRIBER_TIMEOUT_SECS = 5.0
 PERIODIC_TICK_SECS = 0.2
@@ -110,6 +117,7 @@ class ShowState:
         self.show_mode = False
         self.panicking = False
         self.panic_clear_at = None
+        self.elapsed = 0.0  # of the most recently fired cue, for the P2 stream
 
     def _standing(self):
         return self.adhoc if self.adhoc is not None else CUES[self.index]
@@ -120,13 +128,21 @@ class ShowState:
     def status_dict(self):
         with self.lock:
             num, name = self._standing()
+            if self.adhoc is not None:
+                window = (0, 0, "", "", "", "")
+            else:
+                prev_num, prev_name = CUES[self.index - 1] if self.index > 0 else ("", "")
+                nxt = self.index + 1
+                next_num, next_name = CUES[nxt] if nxt < len(CUES) else ("", "")
+                window = (self.index + 1, len(CUES), prev_num, prev_name, next_num, next_name)
             return {
                 "standingByNumber": num,
                 "standingByName": name,
-                "notes": "",
+                "notes": NOTES.get(num, ""),
                 "runningCount": self.running_count,
                 "showMode": self.show_mode,
                 "panicking": self.panicking,
+                "_window": window,
             }
 
     def cmd_go(self):
@@ -134,6 +150,7 @@ class ShowState:
             num, name = self._standing()
             self.running_count = min(RUNNING_CAP, self.running_count + 1)
             self.adhoc = None
+            self.elapsed = 0.0
             self._advance()
             nnum, nname = self._standing()
             return (
@@ -236,7 +253,7 @@ def osc_int(i):
 
 
 def encode_osc_message(address, *args):
-    """args: sequence of (type_char, value); type_char in {'s', 'i'}."""
+    """args: sequence of (type_char, value); type_char in {'s', 'i', 'f'}."""
     type_tag = "," + "".join(t for t, _ in args)
     out = osc_string(address) + osc_string(type_tag)
     for t, v in args:
@@ -244,12 +261,17 @@ def encode_osc_message(address, *args):
             out += osc_string(v)
         elif t == "i":
             out += osc_int(v)
+        elif t == "f":
+            out += struct.pack(">f", v)
         else:
             raise ValueError(f"unsupported OSC type {t!r}")
     return out
 
 
 def build_feedback_messages(status):
+    """P1 status set plus the P2 window/notes messages (StageWizard dev D21)."""
+    window = status.get("_window", (0, 0, "", "", "", ""))
+    idx, total, prev_num, prev_name, next_num, next_name = window
     return [
         encode_osc_message(
             "/stagewizard/status/standingby",
@@ -259,7 +281,20 @@ def build_feedback_messages(status):
         encode_osc_message("/stagewizard/status/running", ("i", status["runningCount"])),
         encode_osc_message("/stagewizard/status/panic", ("i", 1 if status["panicking"] else 0)),
         encode_osc_message("/stagewizard/status/showmode", ("i", 1 if status["showMode"] else 0)),
+        encode_osc_message(
+            "/stagewizard/status/window",
+            ("i", idx), ("i", total),
+            ("s", prev_num), ("s", prev_name),
+            ("s", next_num), ("s", next_name),
+        ),
+        encode_osc_message("/stagewizard/status/notes", ("s", status["notes"])),
     ]
+
+
+def build_elapsed_message(elapsed, duration):
+    return encode_osc_message(
+        "/stagewizard/status/elapsed", ("f", elapsed), ("f", duration)
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -383,6 +418,17 @@ def periodic_loop(state, subscribers, sock, feedback_enabled, stop_event):
             alive, expired = subscribers.live_and_prune()
             for addr in expired:
                 log(f"FEEDBACK EXPIRE {addr[0]}:{addr[1]} (total subscribers={len(alive)})")
+
+            # P2 elapsed stream: like the real host, only while anything runs.
+            with state.lock:
+                running = state.running_count > 0
+                if running:
+                    state.elapsed = min(state.elapsed + PERIODIC_TICK_SECS, DEMO_CUE_DURATION)
+                    elapsed = state.elapsed
+            if running and alive:
+                msg = build_elapsed_message(elapsed, DEMO_CUE_DURATION)
+                for addr in alive:
+                    sock.sendto(msg, addr)
 
 
 # ---------------------------------------------------------------------------

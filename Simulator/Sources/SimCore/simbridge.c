@@ -214,6 +214,11 @@ void sim_set_link(bool enabled, const char *host_ip, uint16_t osc_port, uint16_t
     showlink_configure(host_ip, osc_port, http_port, enabled);
 }
 
+void sim_goto_tile(int32_t index)
+{
+    showui_goto_tile((int)index);
+}
+
 void sim_get_link_state(sim_link_state_t *out)
 {
     if (!out) return;

@@ -31,7 +31,13 @@
 #define PING_INTERVAL_MS   1000u
 #define POLL_INTERVAL_MS   500u
 #define HTTP_TIMEOUT_MS    1500u
-#define FRESH_MS           2500u
+/* The host pushes OSC feedback only on change (elapsed only while running),
+ * so a quiet-but-alive host can be silent for a while — allow 10 s before
+ * considering OSC stale. HTTP polls are request/response, so 2.5 s is right
+ * there. A host-side heartbeat (requested) will let this window shrink. */
+#define OSC_FRESH_MS       10000u
+#define HTTP_FRESH_MS      2500u
+#define ELAPSED_FRESH_MS   2000u
 
 typedef enum { HTTP_IDLE, HTTP_CONNECTING, HTTP_SENDING, HTTP_READING } http_phase_t;
 
@@ -64,6 +70,13 @@ static struct {
     char sb_name[SHOWLINK_NAME_MAX];
     int32_t running_count;
     bool show_mode, panicking;
+
+    int32_t window_index, window_total;
+    char prev_number[SHOWLINK_NUM_MAX], prev_name[SHOWLINK_NAME_MAX];
+    char next_number[SHOWLINK_NUM_MAX], next_name[SHOWLINK_NAME_MAX];
+    char notes[SHOWLINK_NOTES_MAX];
+    float elapsed_s, duration_s;
+    bool elapsed_seen; uint32_t elapsed_ms;
 } L = { .osc_fd = -1, .http_fd = -1 };
 
 /* ---------- small utils ---------------------------------------------------- */
@@ -77,6 +90,13 @@ static void set_nonblocking(int fd)
 {
     int flags = fcntl(fd, F_GETFL, 0);
     if (flags >= 0) fcntl(fd, F_SETFL, flags | O_NONBLOCK);
+#ifdef SO_NOSIGPIPE
+    /* macOS: a send() on a reset TCP socket (e.g. the web remote is off and
+     * the connect was refused) raises SIGPIPE and kills the process unless
+     * suppressed. lwIP has no SIGPIPE, so this is a host-platform guard. */
+    int one = 1;
+    setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &one, sizeof(one));
+#endif
 }
 
 static void close_http(void)
@@ -148,18 +168,24 @@ static void osc_ingest(const uint8_t *p, size_t len, uint32_t now_ms)
     p = osc_read_str(p, end, &tags);
     if (!p || tags[0] != ',') return;
 
-    /* Decode up to 2 args of the i/s shapes the status feedback uses. */
-    int32_t iv[2] = { 0, 0 };
-    const char *sv[2] = { "", "" };
+    /* Decode up to 6 args of the i/f/s shapes the status feedback uses,
+     * stored by argument position. */
+    enum { MAX_ARGS = 6 };
+    int32_t iv[MAX_ARGS] = { 0 };
+    float fv[MAX_ARGS] = { 0 };
+    const char *sv[MAX_ARGS];
+    for (int i = 0; i < MAX_ARGS; i++) sv[i] = "";
     int argc = 0;
-    for (const char *t = tags + 1; *t && argc < 2; t++) {
+    for (const char *t = tags + 1; *t && argc < MAX_ARGS; t++) {
         if (*t == 'i') {
             if (!(p = osc_read_i32(p, end, &iv[argc]))) return;
         } else if (*t == 's') {
             if (!(p = osc_read_str(p, end, &sv[argc]))) return;
         } else if (*t == 'f') {
-            if (p + 4 > end) return;
-            p += 4;
+            int32_t bits;
+            if (!(p = osc_read_i32(p, end, &bits))) return;
+            union { int32_t i; float f; } u = { .i = bits };
+            fv[argc] = u.f;
         } else {
             return; /* unknown tag: widths untrustworthy from here on */
         }
@@ -175,6 +201,20 @@ static void osc_ingest(const uint8_t *p, size_t len, uint32_t now_ms)
         L.panicking = (iv[0] != 0);
     } else if (strcmp(addr, "/stagewizard/status/showmode") == 0) {
         L.show_mode = (iv[0] != 0);
+    } else if (strcmp(addr, "/stagewizard/status/window") == 0) {
+        L.window_index = iv[0];
+        L.window_total = iv[1];
+        copy_str(L.prev_number, sizeof(L.prev_number), sv[2]);
+        copy_str(L.prev_name, sizeof(L.prev_name), sv[3]);
+        copy_str(L.next_number, sizeof(L.next_number), sv[4]);
+        copy_str(L.next_name, sizeof(L.next_name), sv[5]);
+    } else if (strcmp(addr, "/stagewizard/status/notes") == 0) {
+        copy_str(L.notes, sizeof(L.notes), sv[0]);
+    } else if (strcmp(addr, "/stagewizard/status/elapsed") == 0) {
+        L.elapsed_s = fv[0];
+        L.duration_s = fv[1];
+        L.elapsed_seen = true;
+        L.elapsed_ms = now_ms;
     } else {
         return; /* not a status message: does not refresh freshness */
     }
@@ -364,6 +404,12 @@ void showlink_configure(const char *host_ip, uint16_t osc_port,
     L.running_count = 0;
     L.show_mode = false;
     L.panicking = false;
+    L.window_index = 0;
+    L.window_total = 0;
+    L.prev_number[0] = '\0'; L.prev_name[0] = '\0';
+    L.next_number[0] = '\0'; L.next_name[0] = '\0';
+    L.notes[0] = '\0';
+    L.elapsed_s = 0; L.duration_s = 0; L.elapsed_seen = false;
 
     if (!enabled || !host_ip || !host_ip[0]) return;
 
@@ -405,7 +451,7 @@ void showlink_tick(uint32_t now_ms)
     osc_recv_all(now_ms);
 
     /* HTTP fallback poll — suppressed while OSC feedback is fresh. */
-    bool osc_fresh = age_of(L.osc_seen, L.osc_ms, now_ms) < FRESH_MS;
+    bool osc_fresh = age_of(L.osc_seen, L.osc_ms, now_ms) < OSC_FRESH_MS;
     if (!osc_fresh) {
         if (L.http_phase == HTTP_IDLE &&
             (!L.poll_ever || (uint32_t)(now_ms - L.last_poll_ms) >= POLL_INTERVAL_MS)) {
@@ -423,17 +469,31 @@ void showlink_get_state(showlink_state_t *out)
     memset(out, 0, sizeof(*out));
     out->enabled = L.enabled;
     /* Ages vs. the clock of the latest tick — at 10 Hz ticking that is at
-     * most ~100 ms stale, well inside the 2.5 s freshness window. */
+     * most ~100 ms stale, well inside the freshness windows. */
     uint32_t osc_age = age_of(L.osc_seen, L.osc_ms, L.now_ms);
     uint32_t http_age = age_of(L.http_seen, L.http_ms, L.now_ms);
-    uint32_t best = osc_age < http_age ? osc_age : http_age;
-    out->online = L.enabled && best < FRESH_MS;
-    out->last_status_age_ms = best;
+    bool osc_fresh = osc_age < OSC_FRESH_MS;
+    bool http_fresh = http_age < HTTP_FRESH_MS;
+    out->online = L.enabled && (osc_fresh || http_fresh);
+    out->transport = !out->online ? SHOWLINK_TRANSPORT_NONE
+                   : (osc_fresh ? SHOWLINK_TRANSPORT_OSC : SHOWLINK_TRANSPORT_HTTP);
+    out->last_status_age_ms = osc_age < http_age ? osc_age : http_age;
+    copy_str(out->host, sizeof(out->host), L.enabled ? L.host : "");
     copy_str(out->standing_by_number, sizeof(out->standing_by_number), L.sb_number);
     copy_str(out->standing_by_name, sizeof(out->standing_by_name), L.sb_name);
     out->running_count = L.running_count;
     out->show_mode = L.show_mode;
     out->panicking = L.panicking;
+    out->window_index = L.window_index;
+    out->window_total = L.window_total;
+    copy_str(out->prev_number, sizeof(out->prev_number), L.prev_number);
+    copy_str(out->prev_name, sizeof(out->prev_name), L.prev_name);
+    copy_str(out->next_number, sizeof(out->next_number), L.next_number);
+    copy_str(out->next_name, sizeof(out->next_name), L.next_name);
+    copy_str(out->notes, sizeof(out->notes), L.notes);
+    out->elapsed_s = L.elapsed_s;
+    out->duration_s = L.duration_s;
+    out->elapsed_fresh = age_of(L.elapsed_seen, L.elapsed_ms, L.now_ms) < ELAPSED_FRESH_MS;
 }
 
 void showlink_send_go(void)      { osc_send_address("/stagewizard/go"); }
@@ -443,11 +503,14 @@ void showlink_send_next(void)    { osc_send_address("/stagewizard/next"); }
 void showlink_send_prev(void)    { osc_send_address("/stagewizard/prev"); }
 void showlink_send_toggle(void)  { osc_send_address("/stagewizard/toggle"); }
 
-void showlink_send_fire_cue(const char *number)
+static void send_cue_command(const char *number, const char *suffix)
 {
     if (!number || !number[0] || strchr(number, '/')) return;
     char addr[64];
-    int n = snprintf(addr, sizeof(addr), "/stagewizard/cue/%s/fire", number);
+    int n = snprintf(addr, sizeof(addr), "/stagewizard/cue/%s/%s", number, suffix);
     if (n <= 0 || (size_t)n >= sizeof(addr)) return;
     osc_send_address(addr);
 }
+
+void showlink_send_fire_cue(const char *number)   { send_cue_command(number, "fire"); }
+void showlink_send_select_cue(const char *number) { send_cue_command(number, "select"); }

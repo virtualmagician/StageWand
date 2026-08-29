@@ -65,9 +65,13 @@ static lv_obj_t *s_tv;
 static lv_obj_t *s_dots[TILE_COUNT];
 static lv_obj_t *s_time_label, *s_batt_label, *s_wifi_label, *s_link_dot;
 static lv_obj_t *s_cue_eyebrow, *s_cue_num, *s_cue_name, *s_cue_next, *s_cue_pos;
+static lv_obj_t *s_cue_prog;
 static lv_obj_t *s_go_btn, *s_go_label, *s_stby_btn;
 static lv_obj_t *s_list_rows[CUE_COUNT];
+static lv_obj_t *s_list_eyebrow, *s_local_panel, *s_host_panel;
+static lv_obj_t *s_host_num[3], *s_host_name[3], *s_host_notes;
 static lv_obj_t *s_imu_label, *s_bri_value;
+static lv_obj_t *s_net_wifi, *s_net_link, *s_net_host, *s_net_mode;
 static lv_obj_t *s_sleep_overlay;
 
 static bool s_prev_boot = false, s_prev_pwr = false;
@@ -244,10 +248,15 @@ static void status_timer_cb(lv_timer_t *t)
 
     lv_obj_set_style_text_color(s_wifi_label, in.wifi_connected ? COL_TEXT : COL_LINE, 0);
 
-    lv_label_set_text_fmt(s_imu_label,
-                          "ACC  %+.2f  %+.2f  %+.2f g\nGYR  %+.0f  %+.0f  %+.0f dps",
-                          in.accel_x, in.accel_y, in.accel_z,
-                          in.gyro_x, in.gyro_y, in.gyro_z);
+    /* C-library snprintf, NOT lv_label_set_text_fmt: LVGL's built-in printf
+     * ships with float support off (LV_SPRINTF_USE_FLOAT 0) and renders %f
+     * literally — same default as the device build, so keep floats out of it. */
+    char imu_buf[96];
+    snprintf(imu_buf, sizeof(imu_buf),
+             "ACC  %+.2f  %+.2f  %+.2f g\nGYR  %+.0f  %+.0f  %+.0f dps",
+             (double)in.accel_x, (double)in.accel_y, (double)in.accel_z,
+             (double)in.gyro_x, (double)in.gyro_y, (double)in.gyro_z);
+    label_set_if_changed(s_imu_label, imu_buf);
 
     /* Physical buttons: BOOT = hardware GO, PWR = display sleep toggle. */
     if (in.button_boot && !s_prev_boot) fire_go();
@@ -260,16 +269,17 @@ static void status_timer_cb(lv_timer_t *t)
     }
     s_prev_pwr = in.button_pwr;
 
-    /* --- StageWizard link: status dot + host-mirrored cue screen ---------- */
+    /* --- StageWizard link: status dot + host-mirrored screens ------------- */
     showlink_state_t link;
     showlink_get_state(&link);
     bool live = link.enabled && link.online;
+    char buf[128];
 
     lv_obj_set_style_bg_color(s_link_dot,
         !link.enabled ? COL_LINE : (live ? COL_GO : COL_RED), 0);
 
     if (live) {
-        char buf[96];
+        /* GO tile mirrors the host */
         label_set_if_changed(s_cue_eyebrow, "STANDING BY");
         label_set_if_changed(s_cue_num,
             link.standing_by_number[0] ? link.standing_by_number : "-");
@@ -283,9 +293,44 @@ static void status_timer_cb(lv_timer_t *t)
             lv_obj_set_style_text_color(s_cue_name, COL_MUTED, 0);
             lv_obj_set_style_text_color(s_cue_num, COL_TEXT, 0);
         }
-        snprintf(buf, sizeof(buf), "RUNNING  %d", (int)link.running_count);
+        if (link.next_number[0]) {
+            snprintf(buf, sizeof(buf), "NEXT  %s - %s", link.next_number, link.next_name);
+        } else {
+            snprintf(buf, sizeof(buf), "RUNNING  %d", (int)link.running_count);
+        }
         label_set_if_changed(s_cue_next, buf);
-        label_set_if_changed(s_cue_pos, "HOST");
+        if (link.window_total > 0) {
+            snprintf(buf, sizeof(buf), "%d/%d " LV_SYMBOL_BULLET " RUN %d",
+                     (int)link.window_index, (int)link.window_total, (int)link.running_count);
+        } else {
+            snprintf(buf, sizeof(buf), "RUN %d", (int)link.running_count);
+        }
+        label_set_if_changed(s_cue_pos, buf);
+
+        /* Progress bar: only while the host streams elapsed for a finite cue */
+        if (link.elapsed_fresh && link.duration_s > 0.0f) {
+            int32_t v = (int32_t)(link.elapsed_s / link.duration_s * 1000.0f);
+            if (v < 0) v = 0;
+            if (v > 1000) v = 1000;
+            lv_bar_set_value(s_cue_prog, v, LV_ANIM_OFF);
+            lv_obj_remove_flag(s_cue_prog, LV_OBJ_FLAG_HIDDEN);
+        } else {
+            lv_obj_add_flag(s_cue_prog, LV_OBJ_FLAG_HIDDEN);
+        }
+
+        /* Cues tile shows the host's GO-sequence window */
+        label_set_if_changed(s_list_eyebrow, "GO SEQUENCE");
+        lv_obj_add_flag(s_local_panel, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_remove_flag(s_host_panel, LV_OBJ_FLAG_HIDDEN);
+        label_set_if_changed(s_host_num[0], link.prev_number[0] ? link.prev_number : "-");
+        label_set_if_changed(s_host_name[0], link.prev_name);
+        label_set_if_changed(s_host_num[1],
+            link.standing_by_number[0] ? link.standing_by_number : "-");
+        label_set_if_changed(s_host_name[1], link.standing_by_name);
+        label_set_if_changed(s_host_num[2], link.next_number[0] ? link.next_number : "-");
+        label_set_if_changed(s_host_name[2], link.next_name);
+        label_set_if_changed(s_host_notes, link.notes[0] ? link.notes : "-");
+
         s_link_live = true;
     } else if (s_link_live) {
         /* Dropped back to standalone: restore the local demo stack. */
@@ -293,8 +338,36 @@ static void status_timer_cb(lv_timer_t *t)
         label_set_if_changed(s_cue_eyebrow, "LIVE CUE");
         lv_obj_set_style_text_color(s_cue_name, COL_MUTED, 0);
         lv_obj_set_style_text_color(s_cue_num, COL_TEXT, 0);
+        lv_obj_add_flag(s_cue_prog, LV_OBJ_FLAG_HIDDEN);
+        label_set_if_changed(s_list_eyebrow, "CUE STACK");
+        lv_obj_add_flag(s_host_panel, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_remove_flag(s_local_panel, LV_OBJ_FLAG_HIDDEN);
         cue_apply();
     }
+
+    /* Setup tile: network & OSC health (both modes) */
+    label_set_if_changed(s_net_wifi, in.wifi_connected ? "Wi-Fi   connected" : "Wi-Fi   offline");
+    snprintf(buf, sizeof(buf), "Host    %s", link.enabled ? link.host : "--");
+    label_set_if_changed(s_net_host, buf);
+    if (!link.enabled) {
+        snprintf(buf, sizeof(buf), "Link    off");
+    } else if (link.transport == SHOWLINK_TRANSPORT_OSC) {
+        snprintf(buf, sizeof(buf), "Link    OSC feedback " LV_SYMBOL_BULLET " %us",
+                 (unsigned)(link.last_status_age_ms / 1000u));
+    } else if (link.transport == SHOWLINK_TRANSPORT_HTTP) {
+        snprintf(buf, sizeof(buf), "Link    HTTP poll " LV_SYMBOL_BULLET " %us",
+                 (unsigned)(link.last_status_age_ms / 1000u));
+    } else {
+        snprintf(buf, sizeof(buf), "Link    searching...");
+    }
+    label_set_if_changed(s_net_link, buf);
+    if (live) {
+        snprintf(buf, sizeof(buf), "Show    %s " LV_SYMBOL_BULLET " RUN %d",
+                 link.show_mode ? "SHOW MODE" : "EDIT MODE", (int)link.running_count);
+    } else {
+        snprintf(buf, sizeof(buf), "Show    --");
+    }
+    label_set_if_changed(s_net_mode, buf);
 }
 
 static void link_tick_timer_cb(lv_timer_t *t)
@@ -337,7 +410,15 @@ static void build_cue_tile(void)
     lv_label_set_long_mode(s_cue_next, LV_LABEL_LONG_MODE_DOTS);
     lv_obj_set_width(s_cue_next, 320);
     lv_obj_set_style_text_align(s_cue_next, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_set_style_pad_bottom(s_cue_next, 8, 0);
+
+    /* Playback progress of the running cue (host elapsed/duration feedback) */
+    s_cue_prog = lv_bar_create(t);
+    lv_obj_set_size(s_cue_prog, 280, 4);
+    lv_bar_set_range(s_cue_prog, 0, 1000);
+    lv_obj_set_style_bg_color(s_cue_prog, COL_SURFACE, LV_PART_MAIN);
+    lv_obj_set_style_bg_color(s_cue_prog, COL_GO, LV_PART_INDICATOR);
+    lv_obj_set_style_margin_bottom(s_cue_prog, 4, 0);
+    lv_obj_add_flag(s_cue_prog, LV_OBJ_FLAG_HIDDEN);
 
     /* GO — the one big control */
     s_go_btn = lv_button_create(t);
@@ -374,16 +455,75 @@ static void build_cue_tile(void)
     s_cue_pos = make_label(row, &lv_font_montserrat_14, COL_MUTED, "1 / 8");
 }
 
+/* Host GO-sequence rows: user_data 0 = PREV, 2 = NEXT (tap arms that cue). */
+static void host_row_clicked_cb(lv_event_t *e)
+{
+    int which = (int)(intptr_t)lv_event_get_user_data(e);
+    showlink_state_t link;
+    showlink_get_state(&link);
+    if (which == 0 && link.prev_number[0]) showlink_send_select_cue(link.prev_number);
+    if (which == 2 && link.next_number[0]) showlink_send_select_cue(link.next_number);
+}
+
 static void build_cuelist_tile(void)
 {
     lv_obj_t *t = make_tile(TILE_CUELIST);
     lv_obj_set_flex_flow(t, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_style_pad_row(t, 8, 0);
+    lv_obj_set_scrollbar_mode(t, LV_SCROLLBAR_MODE_OFF);
 
-    make_label(t, &lv_font_montserrat_14, COL_AMBER, "CUE STACK");
+    s_list_eyebrow = make_label(t, &lv_font_montserrat_14, COL_AMBER, "CUE STACK");
+
+    /* --- Linked mode: the host's GO-sequence window (PREV / SB / NEXT) ---- */
+    s_host_panel = lv_obj_create(t);
+    lv_obj_remove_style_all(s_host_panel);
+    lv_obj_set_size(s_host_panel, LV_PCT(100), LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(s_host_panel, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_style_pad_row(s_host_panel, 8, 0);
+    lv_obj_add_flag(s_host_panel, LV_OBJ_FLAG_HIDDEN);
+
+    static const char *ROLES[3] = { "PREV", "SB", "NEXT" };
+    for (int i = 0; i < 3; i++) {
+        lv_obj_t *rowc = lv_obj_create(s_host_panel);
+        lv_obj_remove_style_all(rowc);
+        lv_obj_set_size(rowc, LV_PCT(100), 46);
+        lv_obj_set_style_bg_color(rowc, i == 1 ? COL_SURFACE : COL_BG, 0);
+        lv_obj_set_style_bg_opa(rowc, LV_OPA_COVER, 0);
+        lv_obj_set_style_radius(rowc, 8, 0);
+        lv_obj_set_style_border_width(rowc, 1, 0);
+        lv_obj_set_style_border_color(rowc, i == 1 ? COL_AMBER : COL_LINE, 0);
+        lv_obj_set_style_pad_hor(rowc, 12, 0);
+        lv_obj_set_flex_flow(rowc, LV_FLEX_FLOW_ROW);
+        lv_obj_set_flex_align(rowc, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+        lv_obj_set_style_pad_column(rowc, 12, 0);
+        if (i != 1) {
+            lv_obj_add_flag(rowc, LV_OBJ_FLAG_CLICKABLE);
+            lv_obj_add_event_cb(rowc, host_row_clicked_cb, LV_EVENT_CLICKED, (void *)(intptr_t)i);
+        }
+
+        lv_obj_t *role = make_label(rowc, &lv_font_montserrat_12, COL_MUTED, ROLES[i]);
+        lv_obj_set_width(role, 40);
+        s_host_num[i] = make_label(rowc, &lv_font_montserrat_16,
+                                   i == 1 ? COL_AMBER : COL_MUTED, "-");
+        s_host_name[i] = make_label(rowc, &lv_font_montserrat_14, COL_TEXT, "");
+        lv_label_set_long_mode(s_host_name[i], LV_LABEL_LONG_MODE_DOTS);
+        lv_obj_set_flex_grow(s_host_name[i], 1);
+    }
+
+    make_label(s_host_panel, &lv_font_montserrat_12, COL_AMBER, "NOTES");
+    s_host_notes = make_label(s_host_panel, &lv_font_montserrat_12, COL_MUTED, "-");
+    lv_label_set_long_mode(s_host_notes, LV_LABEL_LONG_MODE_WRAP);
+    lv_obj_set_width(s_host_notes, LV_PCT(100));
+
+    /* --- Standalone mode: the local demo stack ---------------------------- */
+    s_local_panel = lv_obj_create(t);
+    lv_obj_remove_style_all(s_local_panel);
+    lv_obj_set_size(s_local_panel, LV_PCT(100), LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(s_local_panel, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_style_pad_row(s_local_panel, 8, 0);
 
     for (int i = 0; i < CUE_COUNT; i++) {
-        lv_obj_t *rowc = lv_obj_create(t);
+        lv_obj_t *rowc = lv_obj_create(s_local_panel);
         lv_obj_remove_style_all(rowc);
         lv_obj_set_size(rowc, LV_PCT(100), 40);
         lv_obj_set_style_bg_color(rowc, COL_BG, 0);
@@ -504,6 +644,14 @@ static void build_setup_tile(void)
     lv_obj_add_event_cb(bri, brightness_changed_cb, LV_EVENT_VALUE_CHANGED, NULL);
     lv_obj_set_style_margin_bottom(bri, 8, 0);
 
+    /* Network & OSC health ------------------------------------------------- */
+    make_label(t, &lv_font_montserrat_14, COL_TEXT, "Network");
+    s_net_wifi = make_label(t, &lv_font_montserrat_12, COL_MUTED, "Wi-Fi   --");
+    s_net_host = make_label(t, &lv_font_montserrat_12, COL_MUTED, "Host    --");
+    s_net_link = make_label(t, &lv_font_montserrat_12, COL_MUTED, "Link    off");
+    s_net_mode = make_label(t, &lv_font_montserrat_12, COL_MUTED, "Show    --");
+    lv_obj_set_style_margin_bottom(s_net_mode, 8, 0);
+
     make_label(t, &lv_font_montserrat_14, COL_TEXT, "Motion (QMI8658)");
     s_imu_label = make_label(t, &lv_font_montserrat_12, COL_MUTED, "ACC  --\nGYR  --");
 
@@ -603,4 +751,11 @@ void showui_create(void)
     showlink_init();
     lv_timer_create(status_timer_cb, 500, NULL);
     lv_timer_create(link_tick_timer_cb, 100, NULL);
+}
+
+void showui_goto_tile(int index)
+{
+    if (!s_tv || index < 0 || index >= TILE_COUNT) return;
+    lv_tileview_set_tile_by_index(s_tv, (uint32_t)index, 0, LV_ANIM_OFF);
+    tv_scroll_end_cb(NULL);  /* refresh the page dots (cb ignores its arg) */
 }

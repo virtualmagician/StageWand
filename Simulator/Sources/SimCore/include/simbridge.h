@@ -74,6 +74,9 @@ typedef struct {
 void sim_set_link(bool enabled, const char *host_ip, uint16_t osc_port, uint16_t http_port);
 void sim_get_link_state(sim_link_state_t *out);
 
+/* Jump the UI to a tile: 0 = cues, 1 = GO, 2 = faders, 3 = setup. */
+void sim_goto_tile(int32_t index);
+
 #ifdef __cplusplus
 }
 #endif

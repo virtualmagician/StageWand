@@ -25,19 +25,36 @@ extern "C" {
 #define SHOWLINK_HOST_MAX  64
 #define SHOWLINK_NUM_MAX   16
 #define SHOWLINK_NAME_MAX  64
+#define SHOWLINK_NOTES_MAX 96
 
 #define SHOWLINK_DEFAULT_OSC_PORT  53100
 #define SHOWLINK_DEFAULT_HTTP_PORT 53200
 
+typedef enum {
+    SHOWLINK_TRANSPORT_NONE = 0,  /* no fresh state from either path */
+    SHOWLINK_TRANSPORT_OSC  = 1,  /* live /stagewizard/status/... feedback */
+    SHOWLINK_TRANSPORT_HTTP = 2,  /* falling back to GET /status polling */
+} showlink_transport_t;
+
 typedef struct {
     bool enabled;               /* link switched on by the operator */
-    bool online;                /* a good /status arrived within the last 2.5 s */
+    bool online;                /* fresh state from either transport */
+    showlink_transport_t transport;
+    char host[SHOWLINK_HOST_MAX];
     char standing_by_number[SHOWLINK_NUM_MAX];  /* "" when none/unknown */
     char standing_by_name[SHOWLINK_NAME_MAX];   /* "" when none/unknown */
     int32_t running_count;
     bool show_mode;
     bool panicking;
-    uint32_t last_status_age_ms;  /* ms since last good /status; UINT32_MAX if never */
+    uint32_t last_status_age_ms;  /* ms since last good status; UINT32_MAX if never */
+
+    /* P2 feedback (OSC only; zero/empty until the host sends them) */
+    int32_t window_index, window_total;         /* standing-by position in GO sequence */
+    char prev_number[SHOWLINK_NUM_MAX], prev_name[SHOWLINK_NAME_MAX];
+    char next_number[SHOWLINK_NUM_MAX], next_name[SHOWLINK_NAME_MAX];
+    char notes[SHOWLINK_NOTES_MAX];             /* standing-by cue's notes */
+    float elapsed_s, duration_s;                /* duration < 0 = indefinite */
+    bool elapsed_fresh;                         /* an elapsed message within 2 s */
 } showlink_state_t;
 
 void showlink_init(void);
@@ -60,7 +77,8 @@ void showlink_send_panic(void);
 void showlink_send_next(void);
 void showlink_send_prev(void);
 void showlink_send_toggle(void);
-void showlink_send_fire_cue(const char *number);  /* number: no slashes, per host rule */
+void showlink_send_fire_cue(const char *number);   /* number: no slashes, per host rule */
+void showlink_send_select_cue(const char *number); /* arm without firing (host D21+) */
 
 #ifdef __cplusplus
 }
