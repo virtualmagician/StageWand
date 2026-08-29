@@ -1,9 +1,12 @@
-# WaveShare Show Controllers
+# StageWand
 
-HMI show controllers built on the Waveshare **ESP32-C6-Touch-AMOLED-1.8**
-board (SKU 33305). A native macOS simulator runs the *identical* LVGL C UI
-code the firmware runs on-device, so screens are designed and debugged on a
-laptop before ever touching hardware.
+Handheld hardware cue controllers for
+[StageWizard](https://github.com/virtualmagician/StageWizard), built on the
+Waveshare **ESP32-C6-Touch-AMOLED-1.8** board (SKU 33305). A native macOS
+simulator runs the *identical* LVGL C UI code the firmware runs on-device,
+so screens are designed and debugged on a laptop before ever touching
+hardware. Show integration will ride StageWizard's OSC/MIDI remote hooks
+over the board's Wi-Fi 6.
 
 ## Repository layout
 

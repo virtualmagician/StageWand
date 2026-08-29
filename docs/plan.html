@@ -1,4 +1,4 @@
-<title>AMOLED Show Controller</title>
+<title>StageWand</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <style>
@@ -258,8 +258,8 @@
 <main>
 <header>
   <p class="eyebrow">Project plan · August 29, 2026</p>
-  <h1>AMOLED Show Controller</h1>
-  <p class="standfirst">Turning a handful of <strong>Waveshare ESP32-C6-Touch-AMOLED-1.8</strong> boards (SKU 33305) into HMI show controllers — starting with a <strong>native macOS simulator</strong> that runs the exact same LVGL C code the boards will run, so graphics and interactions are designed and tested on the Mac and flashed to hardware unchanged.</p>
+  <h1>StageWand</h1>
+  <p class="standfirst">Turning a handful of <strong>Waveshare ESP32-C6-Touch-AMOLED-1.8</strong> boards (SKU 33305) into handheld cue controllers for <a href="https://github.com/virtualmagician/StageWizard">StageWizard</a> — starting with a <strong>native macOS simulator</strong> that runs the exact same LVGL C code the boards will run, so graphics and interactions are designed and tested on the Mac and flashed to hardware unchanged.</p>
 </header>
 
 <section>
@@ -382,7 +382,7 @@
     </li>
     <li>
       <div class="phase-head"><span class="phase-num">05</span><span class="phase-title">Show-control integration</span><span class="chip later">Next</span></div>
-      <p>Make it a real show controller: Wi-Fi 6 + OSC (or MIDI-over-BLE) cue transport to the show system, multi-device roles (GO surface, fader wing, status display), and a simulator mode that mirrors several virtual devices at once.</p>
+      <p>Make it a real show controller: OSC over Wi-Fi 6 (with MIDI-over-BLE as fallback) speaking to <a href="https://github.com/virtualmagician/StageWizard">StageWizard</a>'s new OSC/MIDI remote hooks — multi-device roles (GO surface, fader wing, status display), and a simulator mode that mirrors several virtual devices at once.</p>
     </li>
   </ol>
 </section>
