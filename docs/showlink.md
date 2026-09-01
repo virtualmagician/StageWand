@@ -169,3 +169,12 @@ heartbeat unchanged. BLE-MIDI was evaluated and rejected (macOS manual
 reconnect, no host MIDI output for feedback, reduced verb set). The wand's
 showlink gains this as a second transport during hardware bring-up — NimBLE
 RAM (~40-80 KB) must be measured on the real board first.
+
+### BLE as-built correction (host shipped: dev D28, in v1.7.0 era)
+
+BLEWandLink.swift implements the central side. Direction correction vs the
+original ask (GATT roles fix this): the central can only WRITE, so the host
+writes its FEEDBACK frames to ...0002, and the wand NOTIFIES its COMMANDS
+and pings on ...0003. Same framing both ways; host dispatches anything
+inbound exactly like a UDP datagram. Wand-side NimBLE bring-up is the last
+open item (needs hardware).

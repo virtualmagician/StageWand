@@ -99,7 +99,7 @@
 <header>
   <p class="eyebrow">Handoff · StageWizard ↔ StageWand · closed out September 1, 2026</p>
   <h1>StageWand OSC Requests</h1>
-  <p class="standfirst"><strong>StageWand</strong> — the ESP32-C6 AMOLED hardware cue controller (<a href="https://github.com/virtualmagician/StageWand">repo</a>) — drives StageWizard over OSC and receives push status feedback. This document began as the wand's feature requests and is now the <strong>as-built contract</strong> both sides keep: every original ask shipped — including the color-tag follow-up — the faders question is resolved, and <strong>one new proposal is open</strong>: the Bluetooth fallback link.</p>
+  <p class="standfirst"><strong>StageWand</strong> — the ESP32-C6 AMOLED hardware cue controller (<a href="https://github.com/virtualmagician/StageWand">repo</a>) — drives StageWizard over OSC and receives push status feedback. This document began as the wand's feature requests and is now the <strong>as-built contract</strong> both sides keep: every original ask shipped — including the color-tag follow-up — the faders question is resolved, and <strong>the Bluetooth fallback link's host side is built</strong>; the wand's radio bring-up is the last open item.</p>
 </header>
 
 <section>
@@ -107,7 +107,7 @@
   <h2>Everything shipped — nothing left open</h2>
   <div class="note ok"><strong>P1 and P2 shipped in StageWizard v1.6.0</strong> (released September 1) — all five status addresses with reply-to-sender subscription, <code>/cue/{number}/select</code>, and Bonjour from P3. <strong>The two follow-up asks landed on <span class="mono">dev</span> the same day</strong> (D22, 514 tests green): the liveness heartbeat and the chunked full cue-list dump, both matching the wire shapes the wand already ingests. <strong>P3 faders: resolved by Marco — scrapped.</strong> The wand's fourth page becomes a <em>transport page</em> (TOGGLE · STOP ALL · PANIC), which runs entirely on OSC verbs the host has had since the first OSC release: zero host changes, every control on the wand does something.</div>
   <div class="note ok"><strong>The color-tag follow-up shipped the same day (dev D27):</strong> every <code>/stagewizard/cuelist/item</code> now carries the cue's color tag as an optional trailing arg, and a tag edit re-bursts the list like a rename — see <strong>Cue color tags</strong> below.</div>
-  <div class="note"><strong>New proposal (September 1, later): a Bluetooth LE fallback link</strong> so the wand keeps working when the show Wi-Fi dies — same OSC contract, tunneled over a GATT pipe, with StageWizard as the reconnecting central. Full wire spec in <strong>BLE fallback link</strong> below. (BLE-MIDI was evaluated and rejected: macOS demands a manual Audio&nbsp;MIDI&nbsp;Setup reconnect after sleep/range loss, StageWizard has no MIDI output so the wand would go blind, and the bindable verb set shrinks. Direct BLE has none of those problems.)</div>
+  <div class="note ok"><strong>The BLE fallback link's HOST side shipped the same evening (dev D28, 586 tests):</strong> <span class="mono">BLEWandLink.swift</span> implements the full central-side spec below — standing scan while OSC is enabled, connect-on-sight with the standing auto-reconnect, App Nap exemption, u16-BE framing with split/coalesce reassembly, full refresh on connect, feedback fan-out shared with UDP, and <code>NSBluetoothAlwaysUsageDescription</code>. Bench-testable now against a dev board or LightBlue. Remaining: the wand's NimBLE bring-up, plus one spec correction — see the direction note in the wire table. (BLE-MIDI was evaluated and rejected: macOS demands a manual Audio&nbsp;MIDI&nbsp;Setup reconnect after sleep/range loss, StageWizard has no MIDI output so the wand would go blind, and the bindable verb set shrinks. Direct BLE has none of those problems.)</div>
 </section>
 
 <section>
@@ -162,15 +162,15 @@
     </tbody>
   </table></div>
 
-  <h2 style="font-size:17px; margin-top:30px;"><span class="pill p1">BLE ASK</span>&nbsp; Bluetooth fallback link&nbsp;·&nbsp;proposed</h2>
-  <p class="lede">When show Wi-Fi is unavailable, the wand advertises a BLE GATT service and StageWizard connects as a CoreBluetooth <strong>central</strong>, tunneling the <em>same OSC messages as above, byte-for-byte</em> — commands in, feedback out. One protocol, two transports; no BLE-specific dialect, ever.</p>
+  <h2 style="font-size:17px; margin-top:30px;"><span class="pill p1">BLE ASK</span>&nbsp; Bluetooth fallback link&nbsp; <span class="pill ship">HOST SHIPPED · dev D28</span></h2>
+  <p class="lede">When show Wi-Fi is unavailable, the wand advertises a BLE GATT service and StageWizard connects as a CoreBluetooth <strong>central</strong>, tunneling the <em>same OSC messages as above, byte-for-byte</em> — commands in, feedback out. One protocol, two transports; no BLE-specific dialect, ever. Host side is live on <span class="mono">dev</span>; wand side waits on radio bring-up.</p>
 
   <div class="tablewrap"><table>
     <thead><tr><th>Element</th><th>Value</th><th>Notes</th></tr></thead>
     <tbody>
       <tr><td>Service</td><td class="mono">8B0F4F44-5A5B-4EC1-A0E9-77616E640001</td><td>Advertised by the wand with local name <code>StageWand-&lt;id&gt;</code>. (The <code>77616E64</code> block is "wand" in ASCII.)</td></tr>
-      <tr><td>RX characteristic</td><td class="mono">8B0F4F44-5A5B-4EC1-A0E9-77616E640002</td><td>Central → wand. Write Without Response (Write also accepted). Carries framed OSC commands.</td></tr>
-      <tr><td>TX characteristic</td><td class="mono">8B0F4F44-5A5B-4EC1-A0E9-77616E640003</td><td>Wand → central via Notify. Central subscribes on connect. Carries framed OSC feedback.</td></tr>
+      <tr><td>RX characteristic</td><td class="mono">8B0F4F44-5A5B-4EC1-A0E9-77616E640002</td><td>Central → wand. Write Without Response (Write also accepted). <strong>As built, carries framed OSC feedback</strong> — the original "commands" label here was inverted: commands originate at the wand, and GATT only lets the central WRITE this characteristic, so what the host writes is its feedback stream.</td></tr>
+      <tr><td>TX characteristic</td><td class="mono">8B0F4F44-5A5B-4EC1-A0E9-77616E640003</td><td>Wand → central via Notify. Central subscribes on connect. <strong>As built, carries framed OSC commands + pings</strong> (the wand's outbound traffic — see the direction correction above). The host tunnel is symmetric either way: anything inbound goes through the same dispatch as a UDP datagram.</td></tr>
       <tr><td>Framing</td><td class="mono">u16 big-endian length + OSC payload</td><td>Both directions. Frames may split across or coalesce within writes/notifies — receivers reassemble by length. Required because macOS negotiates only ~182 usable bytes per GATT PDU and <code>status/window</code> can exceed that. Max payload 512 B.</td></tr>
     </tbody>
   </table></div>
@@ -188,7 +188,7 @@
     </tbody>
   </table></div>
 
-  <div class="note"><strong>Capacity &amp; timing (measured, ESP32-class peripheral ↔ Apple central):</strong> GATT throughput runs tens of kB/s — the 64-cue burst is single-digit kB, well under a second — and one-way latency is ~7–12 ms at macOS's ~11 ms connection interval, so GO feels identical to UDP. <strong>Wand-side status:</strong> the BLE transport slots under the existing <code>showlink</code> abstraction but waits for hardware bring-up (NimBLE RAM footprint, roughly 40–80 KB, must be measured in the real build — the Mac simulator cannot fake the C6 radio). The host side can be built and tested any time against a phone/ESP32 dev-board peripheral or LightBlue.</div>
+  <div class="note"><strong>Capacity &amp; timing (measured, ESP32-class peripheral ↔ Apple central):</strong> GATT throughput runs tens of kB/s — the 64-cue burst is single-digit kB, well under a second — and one-way latency is ~7–12 ms at macOS's ~11 ms connection interval, so GO feels identical to UDP. <strong>Wand-side status:</strong> the BLE transport slots under the existing <code>showlink</code> abstraction but waits for hardware bring-up (NimBLE RAM footprint, roughly 40–80 KB, must be measured in the real build — the Mac simulator cannot fake the C6 radio). The host side <strong>is built</strong> (dev D28, <span class="mono">BLEWandLink.swift</span> — framing codec + reassembly fully unit-tested; the Remote tab shows "BLE: n wand(s) connected") and can be bench-tested any time against a phone/ESP32 dev-board peripheral or LightBlue.</div>
 
   <h2 style="font-size:17px; margin-top:30px;"><span class="pill p3">P3</span>&nbsp; Faders &amp; discovery&nbsp; <span class="pill ship">RESOLVED</span></h2>
   <div class="tablewrap"><table>
@@ -207,9 +207,11 @@
 </section>
 
 <footer>
-  <p>As built: StageWizard <a href="https://github.com/virtualmagician/StageWizard/releases/tag/v1.6.0">v1.6.0</a> (released 2026-09-01) + <span class="mono">dev</span> D22/D27 @ 2026-09-01 (<span class="mono">OSCServer.swift</span>, <span class="mono">OSCStatusFeedback.swift</span> — default ports 53100/53200, both off by default, per-show settings) · StageWand client: <span class="mono">Simulator/Sources/SimCore/showui/showlink.[ch]</span> in <a href="https://github.com/virtualmagician/StageWand">virtualmagician/StageWand</a>.</p>
+  <p>As built: StageWizard <a href="https://github.com/virtualmagician/StageWizard/releases/tag/v1.7.0">v1.7.0</a> (released 2026-09-01; includes D22/D27) + <span class="mono">dev</span> D28 @ 2026-09-01 (<span class="mono">OSCServer.swift</span>, <span class="mono">OSCStatusFeedback.swift</span>, <span class="mono">BLEWandLink.swift</span> — default ports 53100/53200, both off by default, per-show settings; BLE rides oscEnabled) · StageWand client: <span class="mono">Simulator/Sources/SimCore/showui/showlink.[ch]</span> in <a href="https://github.com/virtualmagician/StageWand">virtualmagician/StageWand</a>.</p>
 </footer>
 </main>
+
+
 
 
 
