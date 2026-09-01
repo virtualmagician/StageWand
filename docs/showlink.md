@@ -155,3 +155,17 @@ six cue-tag swatches as row tints (~22% over black, standing-by deepened).
 `cuelist/item` accepts an OPTIONAL 4th arg `s colorTag` (red/crimson/rose/
 sky/steel/navy + legacy aliases per CueListView.tagColor); absent = untagged.
 Host-side this is a one-line addition to the item encoder; the mock sends it.
+
+## Planned — BLE fallback transport (spec agreed, wand side awaits hardware)
+
+The handoff doc now carries the BLE fallback spec: the wand advertises GATT
+service 8B0F4F44-5A5B-4EC1-A0E9-77616E640001 (RX write ...0002, TX notify
+...0003) ONLY while Wi-Fi is down (single-radio coexistence is unstable per
+Espressif); StageWizard connects as a CoreBluetooth central with standing
+auto-reconnect. Same OSC messages byte-for-byte, framed as u16-BE length +
+payload (macOS central MTU is ~182 usable; status/window can exceed it).
+Connection = subscription; snapshot burst on connect; 1 Hz ping and 2 s
+heartbeat unchanged. BLE-MIDI was evaluated and rejected (macOS manual
+reconnect, no host MIDI output for feedback, reduced verb set). The wand's
+showlink gains this as a second transport during hardware bring-up — NimBLE
+RAM (~40-80 KB) must be measured on the real board first.
