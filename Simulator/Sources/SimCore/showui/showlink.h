@@ -80,6 +80,19 @@ void showlink_send_toggle(void);
 void showlink_send_fire_cue(const char *number);   /* number: no slashes, per host rule */
 void showlink_send_select_cue(const char *number); /* arm without firing (host D21+) */
 
+/* Full cue list (PROPOSED host feedback, ingested when present):
+ *   /stagewizard/cuelist/begin  i count
+ *   /stagewizard/cuelist/item   i index, s number, s name
+ *   /stagewizard/cuelist/end    i count
+ * Sent on subscribe and on any cue-list edit. Until the host ships it, the
+ * count stays 0 and the UI falls back to the 3-cue window. */
+#define SHOWLINK_MAX_CUES 64
+
+uint32_t showlink_cuelist_revision(void);  /* bumps on every committed list */
+int32_t showlink_cue_count(void);
+bool showlink_get_cue(int32_t index, char *number, uint32_t number_cap,
+                      char *name, uint32_t name_cap);
+
 #ifdef __cplusplus
 }
 #endif

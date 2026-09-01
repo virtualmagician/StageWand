@@ -331,9 +331,21 @@ class Subscribers:
         return alive, expired
 
 
+def build_cuelist_messages():
+    """PROPOSED full cue-list feedback: begin(i count) / item(i, s, s) / end(i count)."""
+    msgs = [encode_osc_message("/stagewizard/cuelist/begin", ("i", len(CUES)))]
+    for i, (num, name) in enumerate(CUES):
+        msgs.append(encode_osc_message(
+            "/stagewizard/cuelist/item", ("i", i), ("s", num), ("s", name)))
+    msgs.append(encode_osc_message("/stagewizard/cuelist/end", ("i", len(CUES))))
+    return msgs
+
+
 def push_feedback_to(sock, addr, state):
     status = state.status_dict()
     for msg in build_feedback_messages(status):
+        sock.sendto(msg, addr)
+    for msg in build_cuelist_messages():
         sock.sendto(msg, addr)
     log(
         f"FEEDBACK PUSH -> {addr[0]}:{addr[1]} "

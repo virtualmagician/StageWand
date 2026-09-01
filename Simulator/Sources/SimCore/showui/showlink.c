@@ -89,6 +89,18 @@ static struct {
     bool elapsed_seen; uint32_t elapsed_ms;
 } L = { .osc_fd = -1, .http_fd = -1 };
 
+/* Full cue list (proposed feedback): double-buffered so a half-received
+ * refresh never tears the rendered list. */
+typedef struct { char num[SHOWLINK_NUM_MAX]; char name[SHOWLINK_NAME_MAX]; } sl_cue_t;
+static struct {
+    sl_cue_t live[SHOWLINK_MAX_CUES];
+    int32_t live_count;
+    uint32_t revision;
+    sl_cue_t staging[SHOWLINK_MAX_CUES];
+    int32_t staging_expected;
+    bool staging_active;
+} CL;
+
 /* ---------- small utils ---------------------------------------------------- */
 
 static uint32_t age_of(bool seen, uint32_t then, uint32_t now)
@@ -242,6 +254,23 @@ static void osc_ingest(const uint8_t *p, size_t len, uint32_t now_ms)
         L.duration_s = fv[1];
         L.elapsed_seen = true;
         L.elapsed_ms = now_ms;
+    } else if (strcmp(addr, "/stagewizard/cuelist/begin") == 0) {
+        CL.staging_expected = iv[0] < 0 ? 0
+            : (iv[0] > SHOWLINK_MAX_CUES ? SHOWLINK_MAX_CUES : iv[0]);
+        memset(CL.staging, 0, sizeof(CL.staging));
+        CL.staging_active = true;
+    } else if (strcmp(addr, "/stagewizard/cuelist/item") == 0) {
+        if (CL.staging_active && iv[0] >= 0 && iv[0] < CL.staging_expected) {
+            copy_str(CL.staging[iv[0]].num, SHOWLINK_NUM_MAX, sv[1]);
+            copy_str(CL.staging[iv[0]].name, SHOWLINK_NAME_MAX, sv[2]);
+        }
+    } else if (strcmp(addr, "/stagewizard/cuelist/end") == 0) {
+        if (CL.staging_active) {
+            memcpy(CL.live, CL.staging, sizeof(CL.live));
+            CL.live_count = CL.staging_expected;
+            CL.staging_active = false;
+            CL.revision++;
+        }
     } else {
         return; /* not a status message: does not refresh freshness */
     }
@@ -446,6 +475,9 @@ void showlink_configure(const char *host_ip, uint16_t osc_port,
     L.next_number[0] = '\0'; L.next_name[0] = '\0';
     L.notes[0] = '\0';
     L.elapsed_s = 0; L.duration_s = 0; L.elapsed_seen = false;
+    CL.live_count = 0;
+    CL.staging_active = false;
+    CL.revision++;
 
     if (!enabled || !host_ip || !host_ip[0]) return;
 
@@ -567,3 +599,17 @@ static void send_cue_command(const char *number, const char *suffix)
 
 void showlink_send_fire_cue(const char *number)   { send_cue_command(number, "fire"); }
 void showlink_send_select_cue(const char *number) { send_cue_command(number, "select"); }
+
+/* Cue list access ----------------------------------------------------------- */
+
+uint32_t showlink_cuelist_revision(void) { return CL.revision; }
+int32_t showlink_cue_count(void) { return CL.live_count; }
+
+bool showlink_get_cue(int32_t index, char *number, uint32_t number_cap,
+                      char *name, uint32_t name_cap)
+{
+    if (index < 0 || index >= CL.live_count) return false;
+    if (number && number_cap) copy_str(number, number_cap, CL.live[index].num);
+    if (name && name_cap) copy_str(name, name_cap, CL.live[index].name);
+    return true;
+}
