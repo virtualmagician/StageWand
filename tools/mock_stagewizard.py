@@ -437,7 +437,8 @@ def periodic_loop(state, subscribers, sock, feedback_enabled, stop_event):
             now_mono = time.monotonic()
             if not hasattr(state, "_last_heartbeat"):
                 state._last_heartbeat = 0.0
-            if alive and now_mono - state._last_heartbeat >= 2.0:
+            if alive and not getattr(state, "no_heartbeat", False) \
+                    and now_mono - state._last_heartbeat >= 2.0:
                 state._last_heartbeat = now_mono
                 hb = encode_osc_message(
                     "/stagewizard/status/running", ("i", state.running_count))
@@ -578,6 +579,9 @@ def build_arg_parser():
     p.add_argument("--http-port", type=int, default=53200, help="HTTP listen port (default 53200)")
     p.add_argument("--bind", default="127.0.0.1", help="bind address (default 127.0.0.1)")
     p.add_argument(
+        "--no-heartbeat", action="store_true",
+        help="emulate a v1.6.0 host: change-only feedback, no ~2s running heartbeat (D22)")
+    p.add_argument(
         "--osc-feedback",
         dest="osc_feedback",
         action="store_true",
@@ -630,6 +634,7 @@ def main(argv=None):
         udp_sock.close()
         return 1
 
+    state.no_heartbeat = args.no_heartbeat
     httpd.show_state = state
     httpd.feedback_enabled = args.osc_feedback
     httpd.udp_sock = udp_sock

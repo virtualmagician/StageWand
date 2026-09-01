@@ -77,6 +77,15 @@ static struct {
     bool http_seen; uint32_t http_ms;  /* last good HTTP /status */
     uint32_t now_ms;                   /* clock as of the latest tick */
 
+    /* Heartbeat detection (StageWizard dev D22+ re-sends /status/running
+     * every ~2 s). Hosts WITHOUT the heartbeat (v1.6.0) are change-only, so
+     * silence there is healthy and liveness rests on the ICMP death detector
+     * alone. Once a heartbeat rhythm is confirmed (3 consecutive ~2 s gaps),
+     * >5.5 s of OSC silence marks the link down — the only trustworthy
+     * dead-host signal for a Wi-Fi wand, where ICMP may never arrive. */
+    bool running_ever; uint32_t last_running_ms;
+    int hb_streak; bool hb_detected;
+
     char sb_number[SHOWLINK_NUM_MAX];
     char sb_name[SHOWLINK_NAME_MAX];
     int32_t running_count;
@@ -121,6 +130,17 @@ static bool osc_path_dead(void)
 {
     return L.osc_err_count >= 2 &&
            age_of(L.osc_err_ever, L.osc_err_ms, L.now_ms) < 3000u;
+}
+
+/* The OSC path is healthy when feedback has ever arrived, pings are landing,
+ * and — on hosts with a confirmed heartbeat — the feed is not stale. */
+static bool osc_path_ok(void)
+{
+    if (!L.osc_seen || !L.ping_ever) return false;
+    if (osc_path_dead()) return false;
+    if (L.hb_detected &&
+        age_of(L.osc_seen, L.osc_ms, L.now_ms) >= OSC_FRESH_MS) return false;
+    return true;
 }
 
 static void set_nonblocking(int fd)
@@ -249,6 +269,16 @@ static void osc_ingest(const uint8_t *p, size_t len, uint32_t now_ms)
         copy_str(L.sb_name, sizeof(L.sb_name), sv[1]);
     } else if (strcmp(addr, "/stagewizard/status/running") == 0) {
         L.running_count = iv[0];
+        if (L.running_ever) {
+            uint32_t gap = (uint32_t)(now_ms - L.last_running_ms);
+            if (gap >= 1200 && gap <= 3500) {
+                if (++L.hb_streak >= 3) L.hb_detected = true;
+            } else if (gap > 3500) {
+                L.hb_streak = 0;
+            }
+        }
+        L.running_ever = true;
+        L.last_running_ms = now_ms;
     } else if (strcmp(addr, "/stagewizard/status/panic") == 0) {
         L.panicking = (iv[0] != 0);
     } else if (strcmp(addr, "/stagewizard/status/showmode") == 0) {
@@ -488,6 +518,7 @@ void showlink_configure(const char *host_ip, uint16_t osc_port,
     L.next_number[0] = '\0'; L.next_name[0] = '\0';
     L.notes[0] = '\0';
     L.elapsed_s = 0; L.duration_s = 0; L.elapsed_seen = false;
+    L.running_ever = false; L.hb_streak = 0; L.hb_detected = false;
     CL.live_count = 0;
     CL.staging_active = false;
     CL.revision++;
@@ -541,10 +572,9 @@ void showlink_tick(uint32_t now_ms)
 
     osc_recv_all(now_ms);
 
-    /* HTTP fallback poll — suppressed while the OSC path is healthy (we've
-     * received feedback and no recent refusals); a quiet host needs no polls. */
-    bool osc_healthy = L.osc_seen && !osc_path_dead();
-    if (!osc_healthy) {
+    /* HTTP fallback poll — suppressed while the OSC path is healthy; a quiet
+     * host needs no polls. */
+    if (!osc_path_ok()) {
         if (L.http_phase == HTTP_IDLE &&
             (!L.poll_ever || (uint32_t)(now_ms - L.last_poll_ms) >= POLL_INTERVAL_MS)) {
             L.last_poll_ms = now_ms;
@@ -570,7 +600,7 @@ void showlink_get_state(showlink_state_t *out)
      * regardless of how long the show state has been unchanged. */
     uint32_t osc_age = age_of(L.osc_seen, L.osc_ms, L.now_ms);
     uint32_t http_age = age_of(L.http_seen, L.http_ms, L.now_ms);
-    bool osc_path = L.osc_seen && L.ping_ever && !osc_path_dead();
+    bool osc_path = osc_path_ok();
     bool http_fresh = http_age < HTTP_FRESH_MS;
     out->online = L.enabled && (osc_path || http_fresh);
     out->transport = !out->online ? SHOWLINK_TRANSPORT_NONE
