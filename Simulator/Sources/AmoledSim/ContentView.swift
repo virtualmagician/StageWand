@@ -25,7 +25,9 @@ struct ContentView: View {
     @EnvironmentObject private var engine: SimEngine
 
     // Display
-    @State private var scale: DisplayScale = .x1_5
+    // 1x by default (pixel-perfect native size); the choice persists across launches.
+    @State private var scale: DisplayScale =
+        DisplayScale(rawValue: UserDefaults.standard.double(forKey: "displayScale")) ?? .x1
     @State private var showFlushRects = false
 
     // Power
@@ -66,6 +68,9 @@ struct ContentView: View {
             engine.setBattery(percent: Int(batteryPercent), charging: charging)
             engine.setMotion(pitchDegrees: pitch, rollDegrees: roll)
             engine.setWifi(connected: wifiConnected)
+        }
+        .onChange(of: scale) { _, newValue in
+            UserDefaults.standard.set(newValue.rawValue, forKey: "displayScale")
         }
         .onChange(of: batteryPercent) { _, newValue in
             engine.setBattery(percent: Int(newValue), charging: charging)
