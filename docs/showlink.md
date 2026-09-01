@@ -145,3 +145,13 @@ Client alignment: OSC staleness window tightened to 5.5 s (two missed
 heartbeats); window `index` handled as 0-based with −1 = nothing standing
 by (displayed 1-based); the mock emulates the heartbeat and 0-based index.
 Faders were scrapped per the contract — page 3 is the transport page.
+
+## Update — StageWizard family palette + cue color tags
+
+ShowUI now wears StageWizard's Theme (dev): MagicLab steel-blue accent
+`#7A9EB6` — which GO wears, matching the host's own `Theme.go = accent` —
+standby green `#59D959` for the link dot, panic `#E64D33`, and the host's
+six cue-tag swatches as row tints (~22% over black, standing-by deepened).
+`cuelist/item` accepts an OPTIONAL 4th arg `s colorTag` (red/crimson/rose/
+sky/steel/navy + legacy aliases per CueListView.tagColor); absent = untagged.
+Host-side this is a one-line addition to the item encoder; the mock sends it.

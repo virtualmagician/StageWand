@@ -89,6 +89,9 @@ CUES = [
 DEFAULT_INDEX = 2  # cue "3" -- matches the /status example in the spec
 RUNNING_CAP = 8
 
+# StageWizard cue color tags (optional 4th arg on cuelist/item).
+CUE_TAGS = {"1": "sky", "2": "navy", "3": "red", "4": "steel", "5": "crimson"}
+
 # Demo notes for the P2 /stagewizard/status/notes feedback.
 NOTES = {
     "3": "Followspot pickup stage left. Wait for applause to settle.",
@@ -338,7 +341,8 @@ def build_cuelist_messages():
     msgs = [encode_osc_message("/stagewizard/cuelist/begin", ("i", len(CUES)))]
     for i, (num, name) in enumerate(CUES):
         msgs.append(encode_osc_message(
-            "/stagewizard/cuelist/item", ("i", i), ("s", num), ("s", name)))
+            "/stagewizard/cuelist/item", ("i", i), ("s", num), ("s", name),
+            ("s", CUE_TAGS.get(num, ""))))
     msgs.append(encode_osc_message("/stagewizard/cuelist/end", ("i", len(CUES))))
     return msgs
 

@@ -80,18 +80,22 @@ void showlink_send_toggle(void);
 void showlink_send_fire_cue(const char *number);   /* number: no slashes, per host rule */
 void showlink_send_select_cue(const char *number); /* arm without firing (host D21+) */
 
-/* Full cue list (PROPOSED host feedback, ingested when present):
+/* Full cue list (host feedback, dev D22+):
  *   /stagewizard/cuelist/begin  i count
- *   /stagewizard/cuelist/item   i index, s number, s name
+ *   /stagewizard/cuelist/item   i index, s number, s name [, s colorTag]
  *   /stagewizard/cuelist/end    i count
- * Sent on subscribe and on any cue-list edit. Until the host ships it, the
- * count stays 0 and the UI falls back to the 3-cue window. */
+ * Sent on subscribe and on any cue-list edit; hosts without it leave the
+ * count at 0 and the UI falls back to the 3-cue window. colorTag is an
+ * OPTIONAL 4th arg (StageWizard's cue color tags: red/crimson/rose/sky/
+ * steel/navy + legacy aliases) — absent means untagged. */
 #define SHOWLINK_MAX_CUES 64
+#define SHOWLINK_TAG_MAX  12
 
 uint32_t showlink_cuelist_revision(void);  /* bumps on every committed list */
 int32_t showlink_cue_count(void);
 bool showlink_get_cue(int32_t index, char *number, uint32_t number_cap,
-                      char *name, uint32_t name_cap);
+                      char *name, uint32_t name_cap,
+                      char *color_tag, uint32_t tag_cap);  /* tag "" = untagged */
 
 #ifdef __cplusplus
 }

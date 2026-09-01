@@ -24,15 +24,21 @@
 #include "showui_hal.h"
 #include "showlink.h"
 
-/* --- palette (AMOLED true-black theme, amber accent) ---------------------- */
+/* --- palette --------------------------------------------------------------
+ * StageWizard's family palette (Theme.swift on dev), on an AMOLED true-black
+ * ground: MagicLab steel-blue accent — which GO wears, per the host's own
+ * Theme ("Marco's call") — standby green for liveness, StageWizard's panic
+ * red, and the host's six cue color tags as row tints. */
 #define COL_BG       lv_color_black()
-#define COL_SURFACE  lv_color_hex(0x14181D)
+#define COL_SURFACE  lv_color_hex(0x191D22)
 #define COL_LINE     lv_color_hex(0x2A323C)
 #define COL_TEXT     lv_color_hex(0xE8EAED)
 #define COL_MUTED    lv_color_hex(0x8A93A0)
-#define COL_AMBER    lv_color_hex(0xFFB454)
-#define COL_GO       lv_color_hex(0x35C45F)
-#define COL_RED      lv_color_hex(0xFF5C5C)
+#define COL_ACCENT   lv_color_hex(0x7A9EB6)  /* Theme.accent — MagicLab blue */
+#define COL_GO       COL_ACCENT              /* Theme.go = accent */
+#define COL_GO_PRESS lv_color_hex(0x5E7F94)
+#define COL_OK       lv_color_hex(0x59D959)  /* Theme.standby green */
+#define COL_RED      lv_color_hex(0xE64D33)  /* Theme.panic */
 
 #define STATUS_H 30
 #define TILE_COUNT 4
@@ -63,7 +69,24 @@ static bool s_link_live = false;
 static uint32_t s_rendered_rev = 0;
 static char s_rendered_sig[160];
 static char s_row_numbers[SHOWLINK_MAX_CUES][SHOWLINK_NUM_MAX];
+static bool s_row_tagged[SHOWLINK_MAX_CUES];
+static lv_color_t s_row_tag_color[SHOWLINK_MAX_CUES];
 static char s_sb_highlighted[SHOWLINK_NUM_MAX];
+
+/* StageWizard's cue color tags (CueListView.tagColor on dev), including the
+ * legacy aliases the host maps to the same swatches. */
+static bool tag_color(const char *tag, lv_color_t *out)
+{
+    if (!tag || !tag[0]) return false;
+    if (strcmp(tag, "red") == 0) { *out = lv_color_hex(0xEB4740); return true; }
+    if (strcmp(tag, "crimson") == 0) { *out = lv_color_hex(0xB81F47); return true; }
+    if (strcmp(tag, "rose") == 0 || strcmp(tag, "orange") == 0 ||
+        strcmp(tag, "yellow") == 0) { *out = lv_color_hex(0xF28C8C); return true; }
+    if (strcmp(tag, "sky") == 0 || strcmp(tag, "green") == 0) { *out = lv_color_hex(0x8CBFE6); return true; }
+    if (strcmp(tag, "steel") == 0 || strcmp(tag, "blue") == 0) { *out = lv_color_hex(0x7A9EB6); return true; }
+    if (strcmp(tag, "navy") == 0 || strcmp(tag, "purple") == 0) { *out = lv_color_hex(0x40618C); return true; }
+    return false;
+}
 
 /* --- helpers -------------------------------------------------------------- */
 
@@ -117,21 +140,30 @@ static void tv_scroll_end_cb(lv_event_t *e)
     lv_obj_t *active = lv_tileview_get_tile_active(s_tv);
     for (int i = 0; i < TILE_COUNT; i++) {
         bool on = (lv_obj_get_child(s_tv, i) == active);
-        lv_obj_set_style_bg_color(s_dots[i], on ? COL_AMBER : COL_LINE, 0);
+        lv_obj_set_style_bg_color(s_dots[i], on ? COL_ACCENT : COL_LINE, 0);
     }
 }
 
 /* --- cue list rendering ---------------------------------------------------- */
 
-typedef struct { const char *num; const char *name; } cue_entry_t;
+typedef struct { const char *num; const char *name; const char *tag; } cue_entry_t;
 
-static lv_obj_t *make_cue_row(const char *number, const char *name, int pool_idx)
+static lv_obj_t *make_cue_row(const char *number, const char *name,
+                              const char *tag, int pool_idx)
 {
+    s_row_tagged[pool_idx] = tag_color(tag, &s_row_tag_color[pool_idx]);
+
     lv_obj_t *rowc = lv_obj_create(s_cuelist);
     lv_obj_remove_style_all(rowc);
     lv_obj_set_size(rowc, LV_PCT(100), 44);
-    lv_obj_set_style_bg_color(rowc, COL_BG, 0);
-    lv_obj_set_style_bg_opa(rowc, LV_OPA_COVER, 0);
+    if (s_row_tagged[pool_idx]) {
+        /* The host tints tagged rows at ~22% over its ground; same here. */
+        lv_obj_set_style_bg_color(rowc, s_row_tag_color[pool_idx], 0);
+        lv_obj_set_style_bg_opa(rowc, 60, 0);
+    } else {
+        lv_obj_set_style_bg_color(rowc, COL_BG, 0);
+        lv_obj_set_style_bg_opa(rowc, LV_OPA_COVER, 0);
+    }
     lv_obj_set_style_radius(rowc, 8, 0);
     lv_obj_set_style_border_width(rowc, 1, 0);
     lv_obj_set_style_border_color(rowc, COL_LINE, 0);
@@ -173,14 +205,17 @@ static void cuelist_update(const showlink_state_t *link)
     cue_entry_t entries[SHOWLINK_MAX_CUES];
     static char nums[SHOWLINK_MAX_CUES][SHOWLINK_NUM_MAX];
     static char names[SHOWLINK_MAX_CUES][SHOWLINK_NAME_MAX];
+    static char tags[SHOWLINK_MAX_CUES][SHOWLINK_TAG_MAX];
     int count = 0;
     int32_t host_count = showlink_cue_count();
     if (host_count > 0) {
         for (int32_t i = 0; i < host_count && count < SHOWLINK_MAX_CUES; i++) {
             if (showlink_get_cue(i, nums[count], SHOWLINK_NUM_MAX,
-                                 names[count], SHOWLINK_NAME_MAX)) {
+                                 names[count], SHOWLINK_NAME_MAX,
+                                 tags[count], SHOWLINK_TAG_MAX)) {
                 entries[count].num = nums[count];
                 entries[count].name = names[count];
+                entries[count].tag = tags[count];
                 count++;
             }
         }
@@ -191,6 +226,7 @@ static void cuelist_update(const showlink_state_t *link)
             if (wn[i][0]) {
                 entries[count].num = wn[i];
                 entries[count].name = wm[i];
+                entries[count].tag = "";
                 count++;
             }
         }
@@ -215,7 +251,7 @@ static void cuelist_update(const showlink_state_t *link)
         s_sb_highlighted[0] = '\0';
         lv_obj_clean(s_cuelist);
         for (int i = 0; i < count; i++) {
-            make_cue_row(entries[i].num, entries[i].name, i);
+            make_cue_row(entries[i].num, entries[i].name, entries[i].tag, i);
         }
         s_rendered_rev = showlink_cuelist_revision();
     }
@@ -230,10 +266,17 @@ static void cuelist_update(const showlink_state_t *link)
             lv_obj_t *row = lv_obj_get_child(s_cuelist, (int32_t)i);
             const char *num = s_row_numbers[i];
             bool is_sb = sb[0] && strcmp(num, sb) == 0;
-            lv_obj_set_style_bg_color(row, is_sb ? COL_SURFACE : COL_BG, 0);
-            lv_obj_set_style_border_color(row, is_sb ? COL_AMBER : COL_LINE, 0);
+            if (s_row_tagged[i]) {
+                /* Tagged rows keep their tint; standing-by deepens it. */
+                lv_obj_set_style_bg_color(row, s_row_tag_color[i], 0);
+                lv_obj_set_style_bg_opa(row, is_sb ? 110 : 60, 0);
+            } else {
+                lv_obj_set_style_bg_color(row, is_sb ? COL_SURFACE : COL_BG, 0);
+                lv_obj_set_style_bg_opa(row, LV_OPA_COVER, 0);
+            }
+            lv_obj_set_style_border_color(row, is_sb ? COL_ACCENT : COL_LINE, 0);
             lv_obj_t *numlbl = lv_obj_get_child(row, 0);
-            if (numlbl) lv_obj_set_style_text_color(numlbl, is_sb ? COL_AMBER : COL_MUTED, 0);
+            if (numlbl) lv_obj_set_style_text_color(numlbl, is_sb ? COL_ACCENT : COL_MUTED, 0);
             if (is_sb) lv_obj_scroll_to_view(row, LV_ANIM_ON);
         }
     }
@@ -395,7 +438,7 @@ static void status_timer_cb(lv_timer_t *t)
     bool live = link.enabled && link.online;
 
     lv_obj_set_style_bg_color(s_link_dot,
-        !link.enabled ? COL_LINE : (live ? COL_GO : COL_RED), 0);
+        !link.enabled ? COL_LINE : (live ? COL_OK : COL_RED), 0);
 
     if (live) {
         apply_live_state(&link);
@@ -477,7 +520,7 @@ static void build_cue_tile(void)
     lv_obj_set_style_pad_row(t, 2, 0);
     lv_obj_set_scrollbar_mode(t, LV_SCROLLBAR_MODE_OFF);
 
-    s_cue_eyebrow = make_label(t, &lv_font_montserrat_14, COL_AMBER, "STANDING BY");
+    s_cue_eyebrow = make_label(t, &lv_font_montserrat_14, COL_ACCENT, "STANDING BY");
 
     s_cue_num = make_label(t, &lv_font_montserrat_48, COL_TEXT, "-");
 
@@ -496,7 +539,7 @@ static void build_cue_tile(void)
     lv_obj_set_size(s_cue_prog, 280, 4);
     lv_bar_set_range(s_cue_prog, 0, 1000);
     lv_obj_set_style_bg_color(s_cue_prog, COL_SURFACE, LV_PART_MAIN);
-    lv_obj_set_style_bg_color(s_cue_prog, COL_GO, LV_PART_INDICATOR);
+    lv_obj_set_style_bg_color(s_cue_prog, COL_ACCENT, LV_PART_INDICATOR);
     lv_obj_set_style_margin_bottom(s_cue_prog, 4, 0);
     lv_obj_add_flag(s_cue_prog, LV_OBJ_FLAG_HIDDEN);
 
@@ -505,7 +548,7 @@ static void build_cue_tile(void)
     lv_obj_set_size(s_go_btn, 158, 158);
     lv_obj_set_style_radius(s_go_btn, LV_RADIUS_CIRCLE, 0);
     lv_obj_set_style_bg_color(s_go_btn, COL_GO, 0);
-    lv_obj_set_style_bg_color(s_go_btn, lv_color_hex(0x2AA04E), LV_STATE_PRESSED);
+    lv_obj_set_style_bg_color(s_go_btn, COL_GO_PRESS, LV_STATE_PRESSED);
     lv_obj_set_style_bg_color(s_go_btn, COL_SURFACE, LV_STATE_DISABLED);
     lv_obj_set_style_shadow_width(s_go_btn, 0, 0);
     s_go_label = make_label(s_go_btn, &lv_font_montserrat_28, lv_color_black(), "GO");
@@ -533,7 +576,7 @@ static void build_cuelist_tile(void)
     lv_obj_set_style_pad_row(t, 8, 0);
     lv_obj_set_scrollbar_mode(t, LV_SCROLLBAR_MODE_OFF);
 
-    make_label(t, &lv_font_montserrat_14, COL_AMBER, "GO SEQUENCE");
+    make_label(t, &lv_font_montserrat_14, COL_ACCENT, "GO SEQUENCE");
 
     /* The scrollable cue list: drag/flick vertically; tap a row to arm it. */
     s_cuelist = lv_obj_create(t);
@@ -547,7 +590,7 @@ static void build_cuelist_tile(void)
     lv_obj_set_scrollbar_mode(s_cuelist, LV_SCROLLBAR_MODE_AUTO);
 
     /* Standing-by cue notes, pinned under the list */
-    make_label(t, &lv_font_montserrat_12, COL_AMBER, "NOTES");
+    make_label(t, &lv_font_montserrat_12, COL_ACCENT, "NOTES");
     s_notes_label = make_label(t, &lv_font_montserrat_12, COL_MUTED, "-");
     lv_label_set_long_mode(s_notes_label, LV_LABEL_LONG_MODE_WRAP);
     lv_obj_set_width(s_notes_label, LV_PCT(100));
@@ -589,11 +632,11 @@ static void build_transport_tile(void)
     lv_obj_set_size(head, LV_PCT(100), 22);
     lv_obj_set_flex_flow(head, LV_FLEX_FLOW_ROW);
     lv_obj_set_flex_align(head, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    make_label(head, &lv_font_montserrat_14, COL_AMBER, "TRANSPORT");
+    make_label(head, &lv_font_montserrat_14, COL_ACCENT, "TRANSPORT");
     s_transport_status = make_label(head, &lv_font_montserrat_14, COL_MUTED, "--");
 
     s_toggle_btn = make_transport_button(t, "PAUSE / RESUME", COL_TEXT, toggle_clicked_cb);
-    s_stopall_btn = make_transport_button(t, "STOP ALL", COL_AMBER, stopall_clicked_cb);
+    s_stopall_btn = make_transport_button(t, "STOP ALL", COL_ACCENT, stopall_clicked_cb);
     s_panic_btn = make_transport_button(t, "PANIC", COL_RED, panic_clicked_cb);
     lv_obj_set_style_bg_color(s_panic_btn, lv_color_hex(0x3A1414), 0);
     lv_obj_set_style_bg_color(s_panic_btn, COL_RED, LV_STATE_PRESSED);
@@ -614,7 +657,7 @@ static void build_setup_tile(void)
     lv_obj_set_flex_align(t, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
     lv_obj_set_style_pad_row(t, 10, 0);
 
-    make_label(t, &lv_font_montserrat_14, COL_AMBER, "SETUP");
+    make_label(t, &lv_font_montserrat_14, COL_ACCENT, "SETUP");
 
     /* Brightness — routed through the HAL (DCS 0x51 on hardware) */
     lv_obj_t *bri_head = lv_obj_create(t);
@@ -630,7 +673,7 @@ static void build_setup_tile(void)
     lv_slider_set_range(bri, 10, 255); /* keep a floor so the panel never goes fully dark */
     lv_slider_set_value(bri, 255, LV_ANIM_OFF);
     lv_obj_set_style_bg_color(bri, COL_SURFACE, LV_PART_MAIN);
-    lv_obj_set_style_bg_color(bri, COL_AMBER, LV_PART_INDICATOR);
+    lv_obj_set_style_bg_color(bri, COL_ACCENT, LV_PART_INDICATOR);
     lv_obj_set_style_bg_color(bri, COL_TEXT, LV_PART_KNOB);
     lv_obj_add_event_cb(bri, brightness_changed_cb, LV_EVENT_VALUE_CHANGED, NULL);
     lv_obj_set_style_margin_bottom(bri, 8, 0);
@@ -723,7 +766,7 @@ void showui_create(void)
         lv_obj_set_size(s_dots[i], 6, 6);
         lv_obj_set_style_radius(s_dots[i], LV_RADIUS_CIRCLE, 0);
         lv_obj_set_style_bg_opa(s_dots[i], LV_OPA_COVER, 0);
-        lv_obj_set_style_bg_color(s_dots[i], i == TILE_CUE ? COL_AMBER : COL_LINE, 0);
+        lv_obj_set_style_bg_color(s_dots[i], i == TILE_CUE ? COL_ACCENT : COL_LINE, 0);
     }
 
     /* Sleep overlay (PWR button): full black, swallows touches */
