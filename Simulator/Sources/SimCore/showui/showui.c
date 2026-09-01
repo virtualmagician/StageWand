@@ -36,14 +36,10 @@
 
 #define STATUS_H 30
 #define TILE_COUNT 4
-#define TILE_CUELIST 0
-#define TILE_CUE     1
-#define TILE_FADERS  2
-#define TILE_SETUP   3
-
-/* Submaster mapping is an open StageWizard product decision (P3); the
- * faders are live UI but drive nothing yet. */
-static const char *FADER_NAMES[4] = { "HSE", "KEY", "FX", "AUD" };
+#define TILE_CUELIST   0
+#define TILE_CUE       1
+#define TILE_TRANSPORT 2
+#define TILE_SETUP     3
 
 static bool s_asleep = false;  /* PWR: display blackout */
 
@@ -55,7 +51,7 @@ static lv_obj_t *s_cue_eyebrow, *s_cue_num, *s_cue_name, *s_cue_next, *s_cue_pos
 static lv_obj_t *s_cue_prog;
 static lv_obj_t *s_go_btn, *s_go_label, *s_prev_btn, *s_next_btn;
 static lv_obj_t *s_cuelist, *s_notes_label;
-static lv_obj_t *s_stopall_btn, *s_panic_btn;
+static lv_obj_t *s_toggle_btn, *s_stopall_btn, *s_panic_btn, *s_transport_status;
 static lv_obj_t *s_imu_label, *s_bri_value;
 static lv_obj_t *s_net_wifi, *s_net_link, *s_net_host, *s_net_mode;
 static lv_obj_t *s_sleep_overlay;
@@ -103,6 +99,7 @@ static void go_clicked_cb(lv_event_t *e)
 
 static void prev_clicked_cb(lv_event_t *e) { (void)e; showlink_send_prev(); }
 static void next_clicked_cb(lv_event_t *e) { (void)e; showlink_send_next(); }
+static void toggle_clicked_cb(lv_event_t *e) { (void)e; showlink_send_toggle(); }
 static void stopall_clicked_cb(lv_event_t *e) { (void)e; showlink_send_stopall(); }
 static void panic_clicked_cb(lv_event_t *e) { (void)e; showlink_send_panic(); }
 
@@ -259,8 +256,10 @@ static void apply_offline_state(void)
     lv_obj_set_style_text_color(s_go_label, COL_LINE, 0);
     set_enabled(s_prev_btn, false);
     set_enabled(s_next_btn, false);
+    set_enabled(s_toggle_btn, false);
     set_enabled(s_stopall_btn, false);
     set_enabled(s_panic_btn, false);
+    label_set_if_changed(s_transport_status, "--");
     cuelist_show_message("No StageWizard link.\nEnable it on the Setup page.");
     s_rendered_sig[0] = '\2';  /* distinct from the linked "waiting" marker */
     s_rendered_sig[1] = '\0';
@@ -315,8 +314,19 @@ static void apply_live_state(const showlink_state_t *link)
     lv_obj_set_style_text_color(s_go_label, lv_color_black(), 0);
     set_enabled(s_prev_btn, true);
     set_enabled(s_next_btn, true);
+    set_enabled(s_toggle_btn, true);
     set_enabled(s_stopall_btn, true);
     set_enabled(s_panic_btn, true);
+
+    if (link->elapsed_fresh && link->duration_s > 0.0f) {
+        snprintf(buf, sizeof(buf), "RUN %d " LV_SYMBOL_BULLET " %d:%02d/%d:%02d",
+                 (int)link->running_count,
+                 (int)(link->elapsed_s / 60), (int)link->elapsed_s % 60,
+                 (int)(link->duration_s / 60), (int)link->duration_s % 60);
+    } else {
+        snprintf(buf, sizeof(buf), "RUN %d", (int)link->running_count);
+    }
+    label_set_if_changed(s_transport_status, buf);
 
     cuelist_update(link);
     label_set_if_changed(s_notes_label, link->notes[0] ? link->notes : "-");
@@ -542,59 +552,49 @@ static void build_cuelist_tile(void)
     lv_obj_set_height(s_notes_label, 34);  /* two lines, clipped */
 }
 
-static void fader_changed_cb(lv_event_t *e)
+static lv_obj_t *make_transport_button(lv_obj_t *parent, const char *text,
+                                       lv_color_t color, lv_event_cb_t cb)
 {
-    lv_obj_t *slider = lv_event_get_target_obj(e);
-    lv_obj_t *value = lv_event_get_user_data(e);
-    lv_label_set_text_fmt(value, "%d", (int)lv_slider_get_value(slider));
+    lv_obj_t *btn = lv_button_create(parent);
+    lv_obj_set_size(btn, LV_PCT(100), 92);
+    lv_obj_set_style_radius(btn, 14, 0);
+    lv_obj_set_style_bg_color(btn, COL_SURFACE, 0);
+    lv_obj_set_style_border_width(btn, 2, 0);
+    lv_obj_set_style_border_color(btn, color, 0);
+    lv_obj_set_style_shadow_width(btn, 0, 0);
+    lv_obj_set_style_border_color(btn, COL_LINE, LV_STATE_DISABLED);
+    lv_obj_set_style_bg_color(btn, COL_BG, LV_STATE_DISABLED);
+    lv_obj_t *l = make_label(btn, &lv_font_montserrat_20, color, text);
+    lv_obj_center(l);
+    lv_obj_add_event_cb(btn, cb, LV_EVENT_CLICKED, NULL);
+    return btn;
 }
 
-static void build_faders_tile(void)
+/* Transport: every control here is a real StageWizard command. Faders were
+ * removed — StageWizard has no level-control OSC yet (open P3 ask); if that
+ * lands, faders belong on a dedicated fader-wing device role, not a 1.8"
+ * touchscreen. */
+static void build_transport_tile(void)
 {
-    lv_obj_t *t = make_tile(TILE_FADERS);
+    lv_obj_t *t = make_tile(TILE_TRANSPORT);
     lv_obj_set_flex_flow(t, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_style_pad_row(t, 6, 0);
+    lv_obj_set_flex_align(t, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_row(t, 14, 0);
+    lv_obj_set_scrollbar_mode(t, LV_SCROLLBAR_MODE_OFF);
 
-    make_label(t, &lv_font_montserrat_14, COL_AMBER, "SUBMASTERS");
+    lv_obj_t *head = lv_obj_create(t);
+    lv_obj_remove_style_all(head);
+    lv_obj_set_size(head, LV_PCT(100), 22);
+    lv_obj_set_flex_flow(head, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(head, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    make_label(head, &lv_font_montserrat_14, COL_AMBER, "TRANSPORT");
+    s_transport_status = make_label(head, &lv_font_montserrat_14, COL_MUTED, "--");
 
-    lv_obj_t *bank = lv_obj_create(t);
-    lv_obj_remove_style_all(bank);
-    lv_obj_set_size(bank, LV_PCT(100), 284);
-    lv_obj_set_flex_flow(bank, LV_FLEX_FLOW_ROW);
-    lv_obj_set_flex_align(bank, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-
-    for (int i = 0; i < 4; i++) {
-        lv_obj_t *col = lv_obj_create(bank);
-        lv_obj_remove_style_all(col);
-        lv_obj_set_size(col, 70, 284);
-        lv_obj_set_flex_flow(col, LV_FLEX_FLOW_COLUMN);
-        lv_obj_set_flex_align(col, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-        lv_obj_set_style_pad_row(col, 10, 0);
-
-        lv_obj_t *value = make_label(col, &lv_font_montserrat_16, COL_TEXT, "0");
-
-        lv_obj_t *slider = lv_slider_create(col);
-        lv_obj_set_size(slider, 30, 176);
-        lv_slider_set_range(slider, 0, 100);
-        lv_slider_set_value(slider, 0, LV_ANIM_OFF);
-        lv_obj_set_style_bg_color(slider, COL_SURFACE, LV_PART_MAIN);
-        lv_obj_set_style_bg_color(slider, COL_AMBER, LV_PART_INDICATOR);
-        lv_obj_set_style_bg_color(slider, COL_TEXT, LV_PART_KNOB);
-        lv_obj_set_style_pad_all(slider, 4, LV_PART_KNOB);
-        lv_obj_add_event_cb(slider, fader_changed_cb, LV_EVENT_VALUE_CHANGED, value);
-
-        make_label(col, &lv_font_montserrat_14, COL_MUTED, FADER_NAMES[i]);
-    }
-
-    /* Transport row: host-wide controls over OSC */
-    lv_obj_t *transport = lv_obj_create(t);
-    lv_obj_remove_style_all(transport);
-    lv_obj_set_size(transport, LV_PCT(100), 46);
-    lv_obj_set_flex_flow(transport, LV_FLEX_FLOW_ROW);
-    lv_obj_set_flex_align(transport, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-
-    s_stopall_btn = make_pill_button(transport, "STOP ALL", COL_AMBER, stopall_clicked_cb, 150);
-    s_panic_btn = make_pill_button(transport, "PANIC", COL_RED, panic_clicked_cb, 150);
+    s_toggle_btn = make_transport_button(t, "PAUSE / RESUME", COL_TEXT, toggle_clicked_cb);
+    s_stopall_btn = make_transport_button(t, "STOP ALL", COL_AMBER, stopall_clicked_cb);
+    s_panic_btn = make_transport_button(t, "PANIC", COL_RED, panic_clicked_cb);
+    lv_obj_set_style_bg_color(s_panic_btn, lv_color_hex(0x3A1414), 0);
+    lv_obj_set_style_bg_color(s_panic_btn, COL_RED, LV_STATE_PRESSED);
 }
 
 static void brightness_changed_cb(lv_event_t *e)
@@ -673,7 +673,7 @@ void showui_create(void)
 
     build_cuelist_tile();
     build_cue_tile();
-    build_faders_tile();
+    build_transport_tile();
     build_setup_tile();
 
     /* Status bar on the top layer: always visible, never scrolls */
