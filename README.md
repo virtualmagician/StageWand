@@ -5,8 +5,19 @@ Handheld hardware cue controllers for
 Waveshare **ESP32-C6-Touch-AMOLED-1.8** board (SKU 33305). A native macOS
 simulator runs the *identical* LVGL C UI code the firmware runs on-device,
 so screens are designed and debugged on a laptop before ever touching
-hardware. Show integration will ride StageWizard's OSC/MIDI remote hooks
-over the board's Wi-Fi 6.
+hardware. The StageWizard link is live: OSC commands out, push status
+feedback in (heartbeat, GO-sequence window, full cue list with color tags),
+with automatic HTTP fallback — the same portable C link code will run over
+the board's Wi-Fi 6.
+
+## The four pages
+
+| GO (home) | Cues | Transport | Setup |
+|:---:|:---:|:---:|:---:|
+| ![GO page](docs/screenshots/go.png) | ![Cues page](docs/screenshots/cues.png) | ![Transport page](docs/screenshots/transport.png) | ![Setup page](docs/screenshots/setup.png) |
+| Standing-by cue, progress, PREV/NEXT | Scrollable GO sequence, color tags, tap to arm, notes | Pause/resume · stop all · panic | Brightness, Wi-Fi + OSC health, IMU |
+
+*Captured from the simulator linked to `tools/mock_stagewizard.py` — pixel-identical to the 368×448 AMOLED.*
 
 ## Repository layout
 
@@ -24,7 +35,13 @@ Simulator/                  Swift package — the macOS simulator
 firmware/                   UNTESTED ESP-IDF skeleton for the real board
 └── showcontroller/           see firmware/README.md before building
 
-docs/plan.html               the full research & plan document
+tools/
+├── mock_stagewizard.py       stand-in host: full remote surface incl. feedback + cue tags
+└── test_link.sh              end-to-end link test (mock + headless simulator)
+
+docs/plan.html                     the full research & plan document
+docs/stagewizard-osc-requests.html the StageWand <-> StageWizard OSC contract, as built
+docs/showlink.md                   link-layer notes (transports, liveness, timings)
 ```
 
 ## Quick start (simulator)
@@ -42,18 +59,26 @@ Packaged `.app` (for double-clicking, or handing to someone else):
 scripts/build_app.sh             # → dist/AmoledSim.app
 ```
 
-Headless, for scripting/CI (renders one frame and exits):
+Headless, for scripting/CI (renders one frame and exits; `--tile 0-3` picks
+the page, `--link <host>` connects to a StageWizard first):
 ```sh
 swift run AmoledSim --snapshot out.png
+```
+
+No StageWizard handy? Run the mock host and the simulator links to it
+(the link defaults to on, host 127.0.0.1):
+```sh
+python3 tools/mock_stagewizard.py
 ```
 
 ## The rule that matters
 
 Screens live **only** in `Simulator/Sources/SimCore/showui/` (`showui.h`,
-`showui_hal.h`, `showui.c`), and that C code is portable: it depends on
-nothing but LVGL and `showui_hal.h`. It is compiled twice — once into the
-macOS simulator, once into the firmware — from the same files on disk (the
-firmware references `showui.c` by relative path; it is never copied).
+`showui_hal.h`, `showui.c`, plus the `showlink.[ch]` StageWizard link), and
+that C code is portable: it depends on nothing but LVGL, `showui_hal.h`,
+and BSD sockets (identical on macOS and lwIP). It is compiled twice — once
+into the macOS simulator, once into the firmware — from the same files on
+disk (the firmware references the sources by relative path; never copied).
 
 `showui_hal.h` is the *entire* boundary to the machine it runs on: battery,
 IMU, RTC time, Wi-Fi status, BOOT/PWR buttons in; brightness out. Each
@@ -62,6 +87,20 @@ inspector panel's fake values), `firmware/showcontroller/main/showui_hal_device.
 on-device (fed by real sensors). **Never add `#ifdef`-platform code inside a
 screen.** If a screen needs to behave differently per platform, that
 difference belongs in the HAL implementation, not in `showui.c`.
+
+## The StageWizard link
+
+`showui/showlink.[ch]` speaks the as-built contract in
+[docs/stagewizard-osc-requests.html](docs/stagewizard-osc-requests.html)
+(StageWizard v1.6.0 + dev D22/D27): OSC 1.0 over UDP `:53100` — commands out
+(`go / stopall / next / prev / toggle / panic / cue/<n>/fire / cue/<n>/select`),
+push status feedback in (standing-by, running + ~2 s heartbeat, panic, show
+mode, GO-sequence window, notes, elapsed, and the chunked full cue list with
+per-cue color tags). A 1 Hz `/stagewand/ping` keeps the subscription alive;
+liveness adapts to the host (heartbeat staleness on D22+, connected-UDP ICMP
+detection otherwise) with automatic `GET /status` HTTP fallback on `:53200`.
+The UI renders StageWizard's family palette — MagicLab-blue GO and the six
+cue-tag row tints.
 
 ## Hardware cheat sheet
 
