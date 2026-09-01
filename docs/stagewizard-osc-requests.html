@@ -15,6 +15,7 @@
     --p1-bg: #3a2c12; --p1-fg: #ffc879;
     --p2-bg: #1c2c3a; --p2-fg: #7fc0f5;
     --p3-bg: #1f2630; --p3-fg: #9aa3ad;
+    --ship-bg: #14301c; --ship-fg: #6fdd8b;
   }
   @media (prefers-color-scheme: light) {
     :root:not([data-theme="dark"]) {
@@ -23,6 +24,7 @@
       --p1-bg: #fdeed3; --p1-fg: #8a5400;
       --p2-bg: #ddeafd; --p2-fg: #1c5c96;
       --p3-bg: #e7eaee; --p3-fg: #5b636d;
+      --ship-bg: #ddf3e2; --ship-fg: #176e33;
     }
   }
   :root[data-theme="light"] {
@@ -31,6 +33,7 @@
     --p1-bg: #fdeed3; --p1-fg: #8a5400;
     --p2-bg: #ddeafd; --p2-fg: #1c5c96;
     --p3-bg: #e7eaee; --p3-fg: #5b636d;
+    --ship-bg: #ddf3e2; --ship-fg: #176e33;
   }
   * { box-sizing: border-box; }
   body {
@@ -83,75 +86,77 @@
   .p1 { background: var(--p1-bg); color: var(--p1-fg); }
   .p2 { background: var(--p2-bg); color: var(--p2-fg); }
   .p3 { background: var(--p3-bg); color: var(--p3-fg); }
+  .ship { background: var(--ship-bg); color: var(--ship-fg); }
   .note {
     background: var(--surface); border-left: 3px solid var(--accent);
     border-radius: 6px; padding: 12px 16px; margin: 18px 0; font-size: 15px; max-width: 72ch;
   }
+  .note.ok { border-left-color: var(--go); }
   footer { padding-top: 32px; color: var(--muted); font-size: 13.5px; }
 </style>
 
 <main>
 <header>
-  <p class="eyebrow">Handoff · for the StageWizard team · August 29, 2026</p>
+  <p class="eyebrow">Handoff · StageWizard ↔ StageWand · closed out September 1, 2026</p>
   <h1>StageWand OSC Requests</h1>
-  <p class="standfirst"><strong>StageWand</strong> — the ESP32-C6 AMOLED hardware cue controller (<a href="https://github.com/virtualmagician/StageWand">repo</a>) — already drives StageWizard through the <code>dev</code>-branch OSC hooks with no host changes. This document lists the <strong>outbound OSC feedback</strong> that would make the wand a first-class surface: what to send, when, and why, in priority order. The wand's client side for every P1 item is already implemented and waiting.</p>
+  <p class="standfirst"><strong>StageWand</strong> — the ESP32-C6 AMOLED hardware cue controller (<a href="https://github.com/virtualmagician/StageWand">repo</a>) — drives StageWizard over OSC and receives push status feedback. This document began as the wand's feature requests and is now the <strong>as-built contract</strong> both sides keep: every ask below shipped, and the one open product question is resolved.</p>
 </header>
 
 <section>
-  <p class="eyebrow">Status · updated later on August 29, 2026</p>
-  <h2>Most of this shipped same-day</h2>
-  <div class="note"><strong>StageWizard <span class="mono">dev</span> D21 implemented P1 and P2 in full</strong> — all five status addresses with reply-to-sender subscription (10 Hz change-diff, elapsed while running), <code>/cue/{number}/select</code>, and Bonjour (<code>_stagewizard._udp</code>) from P3. StageWand ingests all of it as of the same day. <strong>Two asks remain:</strong> (1) <em>new since testing against the real cadence:</em> a low-rate <strong>status heartbeat</strong> (~every 2 s, e.g. re-send <code>/stagewizard/status/running</code>) — feedback is change-only, so with the web remote off a quiet-but-alive host is indistinguishable from a dead one; StageWand currently bridges this with a 10 s grace window before reporting the link lost. One line in the existing 10 Hz tick. (2) The P3 <strong>fader mapping</strong> product decision below.</div>
+  <p class="eyebrow">Status · September 1, 2026</p>
+  <h2>Everything shipped — nothing left open</h2>
+  <div class="note ok"><strong>P1 and P2 shipped in StageWizard v1.6.0</strong> (released September 1) — all five status addresses with reply-to-sender subscription, <code>/cue/{number}/select</code>, and Bonjour from P3. <strong>The two follow-up asks landed on <span class="mono">dev</span> the same day</strong> (D22, 514 tests green): the liveness heartbeat and the chunked full cue-list dump, both matching the wire shapes the wand already ingests. <strong>P3 faders: resolved by Marco — scrapped.</strong> The wand's fourth page becomes a <em>transport page</em> (TOGGLE · STOP ALL · PANIC), which runs entirely on OSC verbs the host has had since the first OSC release: zero host changes, every control on the wand does something.</div>
 </section>
 
 <section>
   <p class="eyebrow">Baseline</p>
-  <h2>What dev already has (and StageWand already uses)</h2>
-  <p class="lede">Read from <span class="mono">OSCServer.swift</span> and <span class="mono">WebRemoteServer.swift</span> on <span class="mono">dev</span>.</p>
+  <h2>What the host speaks</h2>
+  <p class="lede">As of v1.6.0 + <span class="mono">dev</span> D22 (<span class="mono">OSCServer.swift</span>, <span class="mono">OSCStatusFeedback.swift</span>, <span class="mono">WebRemoteServer.swift</span>).</p>
   <div class="tablewrap"><table>
     <thead><tr><th>Surface</th><th>Direction</th><th>Details</th></tr></thead>
     <tbody>
-      <tr><td class="mono">OSC / UDP :53100</td><td>in → host</td><td><code>/stagewizard/go</code> · <code>/stopall</code> · <code>/next</code> · <code>/prev</code> · <code>/toggle</code> · <code>/panic</code> · <code>/stagewizard/cue/&lt;number&gt;/fire</code>. OSC 1.0, tags <code>i f s</code> parsed, bundles supported, address-only dispatch.</td></tr>
-      <tr><td class="mono">HTTP :53200</td><td>out ← host</td><td><code>GET /status</code> → <code>{standingByNumber, standingByName, notes, runningCount, showMode, panicking}</code> — StageWand v1 polls this at 2 Hz as its interim feedback path.</td></tr>
+      <tr><td class="mono">OSC / UDP :53100</td><td>in → host</td><td><code>/stagewizard/go</code> · <code>/stopall</code> · <code>/next</code> · <code>/prev</code> · <code>/toggle</code> · <code>/panic</code> · <code>/stagewizard/cue/&lt;number&gt;/fire</code> · <code>/stagewizard/cue/&lt;number&gt;/select</code>. OSC 1.0, tags <code>i f s</code> parsed, bundles supported (depth-capped), address-only dispatch. Advertised over Bonjour as <code>_stagewizard._udp</code>.</td></tr>
+      <tr><td class="mono">OSC / UDP :53100</td><td>out ← host</td><td>Push status feedback to every live subscriber (see P1/P2 below) — reply-to-sender on the subscriber's own flow, no extra socket or config.</td></tr>
+      <tr><td class="mono">HTTP :53200</td><td>out ← host</td><td><code>GET /status</code> → <code>{standingByNumber, standingByName, notes, runningCount, showMode, panicking}</code> — the wand keeps 2 Hz polling of this as its automatic fallback whenever OSC feedback is absent. Both feedback paths read the same host-side snapshot, so they can never disagree.</td></tr>
     </tbody>
   </table></div>
 </section>
 
 <section>
-  <p class="eyebrow">The ask</p>
-  <h2>Missing pieces, in priority order</h2>
+  <p class="eyebrow">The contract, as built</p>
+  <h2>Delivered pieces, in the original priority order</h2>
 
-  <h2 style="font-size:17px; margin-top:26px;"><span class="pill p1">P1</span>&nbsp; OSC status feedback — replaces HTTP polling</h2>
-  <p class="lede">Everything <code>GET /status</code> already knows, pushed as OSC so a microcontroller doesn't need an HTTP client and gets sub-100 ms updates. Send <strong>on change</strong> plus a full refresh <strong>on subscribe</strong>.</p>
+  <h2 style="font-size:17px; margin-top:26px;"><span class="pill p1">P1</span>&nbsp; OSC status feedback&nbsp; <span class="pill ship">SHIPPED · v1.6.0</span></h2>
+  <p class="lede">Everything <code>GET /status</code> knows, pushed as OSC — sub-100 ms updates (10 Hz change-diff), sent <strong>on change</strong> plus a full refresh <strong>on subscribe</strong>.</p>
   <div class="tablewrap"><table>
     <thead><tr><th>Address</th><th>Args</th><th>When</th><th>Notes</th></tr></thead>
     <tbody>
-      <tr><td class="mono">/stagewand/ping</td><td class="mono">(none)</td><td>wand → host, every 1 s</td><td>Implicit subscription + keepalive. Host records the datagram's source IP:port as a feedback target; drop targets silent for &gt;5 s. Unknown addresses are already ignored silently, so wands can ship this today.</td></tr>
-      <tr><td class="mono">/stagewizard/status/standingby</td><td class="mono">s number, s name</td><td>on change + on subscribe</td><td>Empty strings when nothing is standing by. This is the wand's home screen.</td></tr>
-      <tr><td class="mono">/stagewizard/status/running</td><td class="mono">i count</td><td>on change + on subscribe</td><td>The web remote's <code>runningCount</code>.</td></tr>
-      <tr><td class="mono">/stagewizard/status/panic</td><td class="mono">i 0|1</td><td>on change + on subscribe</td><td>Wand shows a hard red state; must never be stale.</td></tr>
-      <tr><td class="mono">/stagewizard/status/showmode</td><td class="mono">i 0|1</td><td>on change + on subscribe</td><td>Wand can lock its own editing surfaces in show mode.</td></tr>
+      <tr><td class="mono">/stagewand/ping</td><td class="mono">(none)</td><td>wand → host, every 1 s</td><td>Implicit subscription + keepalive. The host records the datagram's source IP:port as a feedback target (any inbound datagram counts) and drops targets silent for &gt;5 s.</td></tr>
+      <tr><td class="mono">/stagewizard/status/standingby</td><td class="mono">s number, s name</td><td>on change + on subscribe</td><td>Empty strings when nothing is standing by. The wand's home screen.</td></tr>
+      <tr><td class="mono">/stagewizard/status/running</td><td class="mono">i count</td><td>on change + on subscribe + <strong>every ~2 s as heartbeat</strong></td><td><span class="pill ship">SHIPPED · dev D22</span> The unconditional ~2 s re-send is the liveness signal: feedback is otherwise change-only, so a quiet-but-alive host was indistinguishable from a dead one. Never double-sent on a tick that already emitted a genuine change; the wand may treat &gt;5 s of silence as link-down.</td></tr>
+      <tr><td class="mono">/stagewizard/status/panic</td><td class="mono">i 0|1</td><td>on change + on subscribe</td><td>Hard red state on the wand; never stale.</td></tr>
+      <tr><td class="mono">/stagewizard/status/showmode</td><td class="mono">i 0|1</td><td>on change + on subscribe</td><td>The wand locks its own editing surfaces in show mode.</td></tr>
     </tbody>
   </table></div>
-  <div class="note"><strong>Implementation note.</strong> Reply-to-sender needs no new socket or config: answer to the source address of any received datagram (NWConnection per-flow, as the listener already tracks). An OSC <em>encoder</em> is the only new code — the mirror of <span class="mono">parseMessage</span>, ~30 lines. StageWand's client side already listens on its send socket and ingests all five addresses; the moment the host transmits, wands go live with zero client changes.</div>
 
-  <h2 style="font-size:17px; margin-top:30px;"><span class="pill p2">P2</span>&nbsp; Cue context — what the wand shows around the playhead</h2>
+  <h2 style="font-size:17px; margin-top:30px;"><span class="pill p2">P2</span>&nbsp; Cue context&nbsp; <span class="pill ship">SHIPPED · v1.6.0 + dev D22</span></h2>
   <div class="tablewrap"><table>
     <thead><tr><th>Address</th><th>Args</th><th>When</th><th>Notes</th></tr></thead>
     <tbody>
-      <tr><td class="mono">/stagewizard/status/window</td><td class="mono">i index, i total, s prevNum, s prevName, s nextNum, s nextName</td><td>on change + on subscribe</td><td><strong>Shipped in D21.</strong> A 3-cue window around the playhead — the wand's minimum viable view.</td></tr>
-      <tr><td class="mono">/stagewizard/cuelist/begin<br>/stagewizard/cuelist/item<br>/stagewizard/cuelist/end</td><td class="mono">begin: i count<br>item: i index, s number, s name<br>end: i count</td><td>on subscribe + on any cue-list edit</td><td><em>New ask (operator request):</em> the full GO sequence, so the wand can show a scrollable cue list instead of only the 3-cue window. Chunked so datagrams stay small; the wand double-buffers begin→end and caps at 64 cues. <strong>The wand already ingests this exact shape</strong> (falls back to the window when absent) — tested against a mock.</td></tr>
-      <tr><td class="mono">/stagewizard/status/notes</td><td class="mono">s notes</td><td>on change + on subscribe</td><td>Already in <code>/status</code>; operators want the standing-by cue's notes on the wand.</td></tr>
-      <tr><td class="mono">/stagewizard/status/elapsed</td><td class="mono">f seconds, f duration</td><td>2 Hz while anything runs</td><td>Drives a progress bar. <code>duration ≤ 0</code> = indefinite (camera/loop).</td></tr>
-      <tr><td class="mono">/stagewizard/cue/&lt;number&gt;/select</td><td class="mono">(none)</td><td>wand → host</td><td><em>Command-side gap:</em> move the playhead / stand a cue by <em>without firing</em>. The wand's cue-list taps should arm, not fire.</td></tr>
+      <tr><td class="mono">/stagewizard/status/window</td><td class="mono">i index, i total, s prevNum, s prevName, s nextNum, s nextName</td><td>on change + on subscribe</td><td>3-cue window around the playhead. <code>index</code> is 0-based in the GO sequence, −1 when nothing stands by; empty strings at the ends.</td></tr>
+      <tr><td class="mono">/stagewizard/cuelist/begin<br>/stagewizard/cuelist/item<br>/stagewizard/cuelist/end</td><td class="mono">begin: i count<br>item: i index, s number, s name<br>end: i count</td><td>on subscribe (after the status messages) + on any cue-list change</td><td><span class="pill ship">SHIPPED · dev D22</span> The full GO sequence, capped at the <strong>first 64 cues</strong>; <code>count</code> = items actually sent, so the wand's begin→end double-buffer is self-consistent. Re-burst on rename, add, remove, or reorder. One datagram per message.</td></tr>
+      <tr><td class="mono">/stagewizard/status/notes</td><td class="mono">s notes</td><td>on change + on subscribe</td><td>The standing-by cue's notes.</td></tr>
+      <tr><td class="mono">/stagewizard/status/elapsed</td><td class="mono">f seconds, f duration</td><td>2 Hz while anything runs</td><td>Progress bar for the latest-started running instance. <code>duration ≤ 0</code> = indefinite (camera/loop; host sends −1).</td></tr>
+      <tr><td class="mono">/stagewizard/cue/&lt;number&gt;/select</td><td class="mono">(none)</td><td>wand → host</td><td>Stands the cue by <em>without firing</em> — moves the playhead through the trigger bus; unknown numbers and un-GO-able cues are silent no-ops. Cue-list taps arm, they never fire.</td></tr>
     </tbody>
   </table></div>
 
-  <h2 style="font-size:17px; margin-top:30px;"><span class="pill p3">P3</span>&nbsp; Faders &amp; discovery — needs a product decision first</h2>
+  <h2 style="font-size:17px; margin-top:30px;"><span class="pill p3">P3</span>&nbsp; Faders &amp; discovery&nbsp; <span class="pill ship">RESOLVED</span></h2>
   <div class="tablewrap"><table>
-    <thead><tr><th>Item</th><th>Sketch</th><th>Open question</th></tr></thead>
+    <thead><tr><th>Item</th><th>Resolution</th></tr></thead>
     <tbody>
-      <tr><td class="mono">/stagewizard/level/&lt;target&gt;</td><td class="mono">f 0.0–1.0</td><td>The wand has 4 hardware submasters. What do they map to in StageWizard's model — master out, render layers, output groups, or tagged cue groups? Define the target vocabulary; the wand adapts.</td></tr>
-      <tr><td>Bonjour advertisement</td><td class="mono">_stagewizard._udp on :53100</td><td>Lets wands find the host with zero configuration — a big deal for hardware with no keyboard. NetService/NWListener advertising is a few lines.</td></tr>
+      <tr><td class="mono">/stagewizard/level/&lt;target&gt;</td><td><strong>Scrapped</strong> (Marco, September 1). Instead of submasters, the wand's fourth page is a <strong>transport page</strong> — three big real controls: TOGGLE (pause/resume) · STOP ALL · PANIC — built entirely on the existing inbound verbs. Zero host work, every control does something. Do not re-propose levels.</td></tr>
+      <tr><td>Bonjour advertisement</td><td><strong>Shipped in v1.6.0.</strong> The UDP listener advertises <code>_stagewizard._udp</code> on the OSC port — wands find the host with zero configuration.</td></tr>
     </tbody>
   </table></div>
 </section>
@@ -159,10 +164,11 @@
 <section>
   <p class="eyebrow">Contract</p>
   <h2>Ground rules both sides keep</h2>
-  <p>Plain OSC 1.0 messages, type tags limited to <code>i f s</code> (exactly what the dev-branch parser accepts today — the wand's parser mirrors it). No bundles required for feedback; each state item is its own message so a lost datagram only stales one field until the next change or subscribe-refresh. All feedback goes to every live subscriber; a subscriber is any source address heard from in the last 5 seconds. StageWand keeps HTTP <code>/status</code> polling as an automatic fallback whenever OSC feedback is absent, so the two can ship in either order.</p>
+  <p>Plain OSC 1.0 messages, type tags limited to <code>i f s</code> — exactly what both parsers accept. No bundles in feedback; each state item is its own message, so a lost datagram only stales one field until the next change, heartbeat, or subscribe-refresh. All feedback goes to every live subscriber; a subscriber is any source address heard from in the last 5 seconds. The ~2 s <code>/status/running</code> heartbeat is the liveness signal in both directions of trust: the wand pings every second to stay subscribed, the host re-sends so the wand knows it is alive. The cue-list burst is double-buffered begin→end on the wand and capped at 64 entries on the host. StageWand keeps HTTP <code>/status</code> polling as an automatic fallback whenever OSC feedback is absent.</p>
 </section>
 
 <footer>
-  <p>Grounded in StageWizard <span class="mono">dev</span> @ 2026-08-29 (<span class="mono">OSCServer.swift</span>, <span class="mono">WebRemoteServer.swift</span>, <span class="mono">ShowFile.swift</span> — default ports 53100/53200, both off by default) · StageWand client: <span class="mono">Simulator/Sources/SimCore/showui/showlink.[ch]</span> in <a href="https://github.com/virtualmagician/StageWand">virtualmagician/StageWand</a>.</p>
+  <p>As built: StageWizard <a href="https://github.com/virtualmagician/StageWizard/releases/tag/v1.6.0">v1.6.0</a> (released 2026-09-01) + <span class="mono">dev</span> D22 @ 2026-09-01 (<span class="mono">OSCServer.swift</span>, <span class="mono">OSCStatusFeedback.swift</span> — default ports 53100/53200, both off by default, per-show settings) · StageWand client: <span class="mono">Simulator/Sources/SimCore/showui/showlink.[ch]</span> in <a href="https://github.com/virtualmagician/StageWand">virtualmagician/StageWand</a>.</p>
 </footer>
 </main>
+

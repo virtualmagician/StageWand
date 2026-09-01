@@ -128,13 +128,15 @@ class ShowState:
     def status_dict(self):
         with self.lock:
             num, name = self._standing()
+            # Contract (D22): index is 0-based in the GO sequence, -1 when the
+            # standing-by cue is not part of it (or nothing stands by).
             if self.adhoc is not None:
-                window = (0, 0, "", "", "", "")
+                window = (-1, len(CUES), "", "", "", "")
             else:
                 prev_num, prev_name = CUES[self.index - 1] if self.index > 0 else ("", "")
                 nxt = self.index + 1
                 next_num, next_name = CUES[nxt] if nxt < len(CUES) else ("", "")
-                window = (self.index + 1, len(CUES), prev_num, prev_name, next_num, next_name)
+                window = (self.index, len(CUES), prev_num, prev_name, next_num, next_name)
             return {
                 "standingByNumber": num,
                 "standingByName": name,
@@ -430,6 +432,17 @@ def periodic_loop(state, subscribers, sock, feedback_enabled, stop_event):
             alive, expired = subscribers.live_and_prune()
             for addr in expired:
                 log(f"FEEDBACK EXPIRE {addr[0]}:{addr[1]} (total subscribers={len(alive)})")
+
+            # D22 liveness heartbeat: re-send running every ~2 s unconditionally.
+            now_mono = time.monotonic()
+            if not hasattr(state, "_last_heartbeat"):
+                state._last_heartbeat = 0.0
+            if alive and now_mono - state._last_heartbeat >= 2.0:
+                state._last_heartbeat = now_mono
+                hb = encode_osc_message(
+                    "/stagewizard/status/running", ("i", state.running_count))
+                for addr in alive:
+                    sock.sendto(hb, addr)
 
             # P2 elapsed stream: like the real host, only while anything runs.
             with state.lock:

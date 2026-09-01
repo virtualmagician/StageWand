@@ -31,11 +31,12 @@
 #define PING_INTERVAL_MS   1000u
 #define POLL_INTERVAL_MS   500u
 #define HTTP_TIMEOUT_MS    1500u
-/* The host pushes OSC feedback only on change (elapsed only while running),
- * so a quiet-but-alive host can be silent for a while — allow 10 s before
- * considering OSC stale. HTTP polls are request/response, so 2.5 s is right
- * there. A host-side heartbeat (requested) will let this window shrink. */
-#define OSC_FRESH_MS       10000u
+/* StageWizard dev D22+ re-sends /stagewizard/status/running every ~2 s as a
+ * liveness heartbeat; the contract says the wand may treat >5 s of silence
+ * as link-down. 5.5 s = two missed heartbeats plus jitter. (Hosts without
+ * the heartbeat are still covered by the connected-UDP ICMP death detector
+ * and the HTTP fallback.) */
+#define OSC_FRESH_MS       5500u
 #define HTTP_FRESH_MS      2500u
 #define ELAPSED_FRESH_MS   2000u
 

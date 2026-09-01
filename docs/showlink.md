@@ -135,3 +135,13 @@ otherwise kills the process via SIGPIPE (lwIP has no SIGPIPE).
 Headless: `--tile N` (0 cues / 1 GO / 2 faders / 3 setup) captures any
 page; the mock now also pushes window/notes and a 30 s demo elapsed
 stream.
+
+## Update — contract closed out (StageWizard v1.6.0 + dev D22, 2026-09-01)
+
+The handoff doc is now the as-built contract: v1.6.0 shipped P1+P2+select+
+Bonjour; dev D22 added the ~2 s `/status/running` liveness heartbeat and the
+full `cuelist` begin/item/end burst (first 64 cues, re-burst on edits).
+Client alignment: OSC staleness window tightened to 5.5 s (two missed
+heartbeats); window `index` handled as 0-based with −1 = nothing standing
+by (displayed 1-based); the mock emulates the heartbeat and 0-based index.
+Faders were scrapped per the contract — page 3 is the transport page.

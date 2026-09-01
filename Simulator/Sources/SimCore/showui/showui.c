@@ -291,9 +291,11 @@ static void apply_live_state(const showlink_state_t *link)
     }
     label_set_if_changed(s_cue_next, buf);
 
-    if (link->window_total > 0) {
+    /* Contract: window index is 0-based in the GO sequence, -1 when nothing
+     * stands by — display 1-based. */
+    if (link->window_index >= 0 && link->window_total > 0) {
         snprintf(buf, sizeof(buf), "%d/%d " LV_SYMBOL_BULLET " RUN %d",
-                 (int)link->window_index, (int)link->window_total, (int)link->running_count);
+                 (int)link->window_index + 1, (int)link->window_total, (int)link->running_count);
     } else {
         snprintf(buf, sizeof(buf), "RUN %d", (int)link->running_count);
     }
