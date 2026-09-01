@@ -65,7 +65,7 @@ func runSnapshotMode(arguments: [String]) {
         sim_set_link(true, linkHost, linkOSCPort, linkHTTPPort)
     }
 
-    // --tile N: capture a specific page (0 cues, 1 GO, 2 transport, 3 setup).
+    // --tile N: capture a specific page (0 GO, 1 cues, 2 transport, 3 setup).
     if let tileString = argumentValue(after: "--tile", in: arguments) {
         if let tile = Int32(tileString), (0...3).contains(tile) {
             sim_goto_tile(tile)

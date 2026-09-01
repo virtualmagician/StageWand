@@ -36,8 +36,8 @@
 
 #define STATUS_H 30
 #define TILE_COUNT 4
-#define TILE_CUELIST   0
-#define TILE_CUE       1
+#define TILE_CUE       0   /* home: GO lives leftmost */
+#define TILE_CUELIST   1
 #define TILE_TRANSPORT 2
 #define TILE_SETUP     3
 
@@ -671,8 +671,10 @@ void showui_create(void)
      * commits a new active tile, so the dots can never read a stale tile. */
     lv_obj_add_event_cb(s_tv, tv_scroll_end_cb, LV_EVENT_VALUE_CHANGED, NULL);
 
-    build_cuelist_tile();
+    /* Creation order must match tile indices (the page dots map child i
+     * to dot i). */
     build_cue_tile();
+    build_cuelist_tile();
     build_transport_tile();
     build_setup_tile();
 
