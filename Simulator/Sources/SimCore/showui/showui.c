@@ -675,6 +675,10 @@ static void build_setup_tile(void)
     lv_obj_set_style_bg_color(bri, COL_SURFACE, LV_PART_MAIN);
     lv_obj_set_style_bg_color(bri, COL_ACCENT, LV_PART_INDICATOR);
     lv_obj_set_style_bg_color(bri, COL_TEXT, LV_PART_KNOB);
+    /* Explicit small knob: the default theme scales knob padding with
+     * LV_DPI_DEF (322 on this panel), which makes the knob overhang the
+     * track further than the page's side padding — clipped at the edge. */
+    lv_obj_set_style_pad_all(bri, 4, LV_PART_KNOB);
     lv_obj_add_event_cb(bri, brightness_changed_cb, LV_EVENT_VALUE_CHANGED, NULL);
     lv_obj_set_style_margin_bottom(bri, 8, 0);
 
