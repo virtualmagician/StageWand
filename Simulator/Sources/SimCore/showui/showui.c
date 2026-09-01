@@ -352,8 +352,10 @@ static void status_timer_cb(lv_timer_t *t)
     if (!link.enabled) {
         snprintf(buf, sizeof(buf), "Link    off");
     } else if (link.transport == SHOWLINK_TRANSPORT_OSC) {
-        snprintf(buf, sizeof(buf), "Link    OSC feedback " LV_SYMBOL_BULLET " %us",
-                 (unsigned)(link.last_status_age_ms / 1000u));
+        unsigned age_s = (unsigned)(link.last_status_age_ms / 1000u);
+        /* "quiet" = healthy subscription, host just has nothing new to say */
+        snprintf(buf, sizeof(buf), "Link    OSC %s " LV_SYMBOL_BULLET " %us",
+                 age_s >= 3 ? "quiet" : "feedback", age_s);
     } else if (link.transport == SHOWLINK_TRANSPORT_HTTP) {
         snprintf(buf, sizeof(buf), "Link    HTTP poll " LV_SYMBOL_BULLET " %us",
                  (unsigned)(link.last_status_age_ms / 1000u));

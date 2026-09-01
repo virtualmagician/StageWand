@@ -51,6 +51,16 @@ static struct {
     int osc_fd;
     uint32_t last_ping_ms;
     bool ping_ever;
+    /* OSC path-death detection. The UDP socket is connect()ed to the host,
+     * so when the OSC listener goes away the ICMP port-unreachable surfaces
+     * as ECONNREFUSED — that, not data staleness, is the "link lost" signal
+     * (feedback is change-only, so a quiet host is healthy, not dead).
+     * macOS quirk: the queued error is returned on ALTERNATE sends (OK,
+     * ECONNREFUSED, OK, ...), so a successful send() proves nothing and must
+     * NOT clear the count — only actually received data does. Errors count
+     * only while recent, so a transient blip self-heals. */
+    int osc_err_count;
+    bool osc_err_ever; uint32_t osc_err_ms;
 
     int http_fd;
     http_phase_t http_phase;
@@ -84,6 +94,20 @@ static struct {
 static uint32_t age_of(bool seen, uint32_t then, uint32_t now)
 {
     return seen ? (uint32_t)(now - then) : UINT32_MAX;
+}
+
+static void note_osc_error(void)
+{
+    if (L.osc_err_count < 100) L.osc_err_count++;
+    L.osc_err_ever = true;
+    L.osc_err_ms = L.now_ms;
+}
+
+/* Dead = repeated ICMP-refused errors that are still recent. */
+static bool osc_path_dead(void)
+{
+    return L.osc_err_count >= 2 &&
+           age_of(L.osc_err_ever, L.osc_err_ms, L.now_ms) < 3000u;
 }
 
 static void set_nonblocking(int fd)
@@ -125,8 +149,11 @@ static void osc_send_address(const char *addr)
     memset(buf, 0, apad + 4);
     memcpy(buf, addr, alen);
     buf[apad] = ',';                                /* ",\0\0\0": no arguments */
-    (void)sendto(L.osc_fd, buf, apad + 4, 0,
-                 (struct sockaddr *)&L.osc_addr, sizeof(L.osc_addr));
+    ssize_t n = send(L.osc_fd, buf, apad + 4, 0);   /* connected UDP socket */
+    if (n < 0 && errno != EAGAIN && errno != EWOULDBLOCK) {
+        note_osc_error();
+    }
+    /* A successful send is NOT evidence of life (see osc_err_count note). */
 }
 
 /* ---------- OSC decoding (proposed status feedback) ------------------------ */
@@ -227,8 +254,17 @@ static void osc_recv_all(uint32_t now_ms)
     if (L.osc_fd < 0) return;
     uint8_t buf[512];
     for (int i = 0; i < 16; i++) {   /* bounded work per tick */
-        ssize_t n = recvfrom(L.osc_fd, buf, sizeof(buf), 0, NULL, NULL);
-        if (n <= 0) break;
+        ssize_t n = recv(L.osc_fd, buf, sizeof(buf), 0);
+        if (n < 0) {
+            /* A queued ICMP unreachable can surface on recv instead of send. */
+            if (errno == ECONNREFUSED || errno == ECONNRESET) {
+                note_osc_error();
+                continue;
+            }
+            break;
+        }
+        if (n == 0) break;
+        L.osc_err_count = 0;   /* real bytes from the host: the path lives */
         if ((size_t)n >= 8 && memcmp(buf, "#bundle\0", 8) == 0) continue;
         osc_ingest(buf, (size_t)n, now_ms);
     }
@@ -431,6 +467,16 @@ void showlink_configure(const char *host_ip, uint16_t osc_port,
     L.osc_fd = socket(AF_INET, SOCK_DGRAM, 0);
     if (L.osc_fd < 0) return;
     set_nonblocking(L.osc_fd);
+    /* Connected UDP: replies filter to the host only, and — the important
+     * part — ICMP port-unreachable (host app quit) surfaces as ECONNREFUSED
+     * on our sends, which is the link-death detector. */
+    if (connect(L.osc_fd, (struct sockaddr *)&L.osc_addr, sizeof(L.osc_addr)) < 0) {
+        close(L.osc_fd);
+        L.osc_fd = -1;
+        return;
+    }
+    L.osc_err_count = 0;
+    L.osc_err_ever = false;
 
     L.enabled = true;
 }
@@ -450,9 +496,10 @@ void showlink_tick(uint32_t now_ms)
 
     osc_recv_all(now_ms);
 
-    /* HTTP fallback poll — suppressed while OSC feedback is fresh. */
-    bool osc_fresh = age_of(L.osc_seen, L.osc_ms, now_ms) < OSC_FRESH_MS;
-    if (!osc_fresh) {
+    /* HTTP fallback poll — suppressed while the OSC path is healthy (we've
+     * received feedback and no recent refusals); a quiet host needs no polls. */
+    bool osc_healthy = L.osc_seen && !osc_path_dead();
+    if (!osc_healthy) {
         if (L.http_phase == HTTP_IDLE &&
             (!L.poll_ever || (uint32_t)(now_ms - L.last_poll_ms) >= POLL_INTERVAL_MS)) {
             L.last_poll_ms = now_ms;
@@ -469,14 +516,20 @@ void showlink_get_state(showlink_state_t *out)
     memset(out, 0, sizeof(*out));
     out->enabled = L.enabled;
     /* Ages vs. the clock of the latest tick — at 10 Hz ticking that is at
-     * most ~100 ms stale, well inside the freshness windows. */
+     * most ~100 ms stale, well inside the freshness windows.
+     *
+     * Online model: OSC feedback is change-only, so a quiet host is healthy.
+     * The 1 Hz ping keeps the host's subscriber registry warm; the connected
+     * UDP socket turns "OSC listener gone" into send errors. So the OSC path
+     * is online once we have EVER received feedback and pings are landing —
+     * regardless of how long the show state has been unchanged. */
     uint32_t osc_age = age_of(L.osc_seen, L.osc_ms, L.now_ms);
     uint32_t http_age = age_of(L.http_seen, L.http_ms, L.now_ms);
-    bool osc_fresh = osc_age < OSC_FRESH_MS;
+    bool osc_path = L.osc_seen && L.ping_ever && !osc_path_dead();
     bool http_fresh = http_age < HTTP_FRESH_MS;
-    out->online = L.enabled && (osc_fresh || http_fresh);
+    out->online = L.enabled && (osc_path || http_fresh);
     out->transport = !out->online ? SHOWLINK_TRANSPORT_NONE
-                   : (osc_fresh ? SHOWLINK_TRANSPORT_OSC : SHOWLINK_TRANSPORT_HTTP);
+                   : (osc_path ? SHOWLINK_TRANSPORT_OSC : SHOWLINK_TRANSPORT_HTTP);
     out->last_status_age_ms = osc_age < http_age ? osc_age : http_age;
     copy_str(out->host, sizeof(out->host), L.enabled ? L.host : "");
     copy_str(out->standing_by_number, sizeof(out->standing_by_number), L.sb_number);
