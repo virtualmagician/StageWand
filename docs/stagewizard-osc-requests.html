@@ -99,13 +99,14 @@
 <header>
   <p class="eyebrow">Handoff · StageWizard ↔ StageWand · closed out September 1, 2026</p>
   <h1>StageWand OSC Requests</h1>
-  <p class="standfirst"><strong>StageWand</strong> — the ESP32-C6 AMOLED hardware cue controller (<a href="https://github.com/virtualmagician/StageWand">repo</a>) — drives StageWizard over OSC and receives push status feedback. This document began as the wand's feature requests and is now the <strong>as-built contract</strong> both sides keep: every ask below shipped, and the one open product question is resolved.</p>
+  <p class="standfirst"><strong>StageWand</strong> — the ESP32-C6 AMOLED hardware cue controller (<a href="https://github.com/virtualmagician/StageWand">repo</a>) — drives StageWizard over OSC and receives push status feedback. This document began as the wand's feature requests and is now the <strong>as-built contract</strong> both sides keep: every original ask shipped, the faders question is resolved, and <strong>one small new ask is open</strong> — the cue color tag on the cue-list burst.</p>
 </header>
 
 <section>
   <p class="eyebrow">Status · September 1, 2026</p>
   <h2>Everything shipped — nothing left open</h2>
   <div class="note ok"><strong>P1 and P2 shipped in StageWizard v1.6.0</strong> (released September 1) — all five status addresses with reply-to-sender subscription, <code>/cue/{number}/select</code>, and Bonjour from P3. <strong>The two follow-up asks landed on <span class="mono">dev</span> the same day</strong> (D22, 514 tests green): the liveness heartbeat and the chunked full cue-list dump, both matching the wire shapes the wand already ingests. <strong>P3 faders: resolved by Marco — scrapped.</strong> The wand's fourth page becomes a <em>transport page</em> (TOGGLE · STOP ALL · PANIC), which runs entirely on OSC verbs the host has had since the first OSC release: zero host changes, every control on the wand does something.</div>
+  <div class="note"><strong>One small new ask since (September 1, later):</strong> carry each cue's <em>color tag</em> on the cue-list burst so the wand's list matches the operator's — see <strong>Cue color tags</strong> below. One line in the item encoder; the wand's side already ships.</div>
 </section>
 
 <section>
@@ -148,6 +149,15 @@
       <tr><td class="mono">/stagewizard/status/notes</td><td class="mono">s notes</td><td>on change + on subscribe</td><td>The standing-by cue's notes.</td></tr>
       <tr><td class="mono">/stagewizard/status/elapsed</td><td class="mono">f seconds, f duration</td><td>2 Hz while anything runs</td><td>Progress bar for the latest-started running instance. <code>duration ≤ 0</code> = indefinite (camera/loop; host sends −1).</td></tr>
       <tr><td class="mono">/stagewizard/cue/&lt;number&gt;/select</td><td class="mono">(none)</td><td>wand → host</td><td>Stands the cue by <em>without firing</em> — moves the playhead through the trigger bus; unknown numbers and un-GO-able cues are silent no-ops. Cue-list taps arm, they never fire.</td></tr>
+    </tbody>
+  </table></div>
+
+  <h2 style="font-size:17px; margin-top:30px;"><span class="pill p1">NEW ASK</span>&nbsp; Cue color tags on the cue-list burst</h2>
+  <p class="lede">The wand now renders StageWizard's family palette, including the cue-tag row tints (~22% over its ground, deepened for the standing-by row, same legacy-alias mapping as <span class="mono">CueListView.tagColor</span>). It just needs the tag on the wire.</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Address</th><th>Args</th><th>Change</th><th>Notes</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">/stagewizard/cuelist/item</td><td class="mono">i index, s number, s name, <strong>s colorTag</strong></td><td>append one OPTIONAL argument</td><td>Send <code>cue.colorTag</code> verbatim (<code>red / crimson / rose / sky / steel / navy</code>, legacy ids as stored, empty string when untagged) — one line in the item encoder. Fully compatible both ways: wands parse positionally, so old wands ignore the extra arg and new wands treat an absent arg as untagged. <strong>The wand already ingests and renders this</strong> — verified against a mock sending tags.</td></tr>
     </tbody>
   </table></div>
 
