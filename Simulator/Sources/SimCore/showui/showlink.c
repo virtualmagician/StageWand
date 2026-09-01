@@ -190,11 +190,23 @@ static const uint8_t *osc_read_i32(const uint8_t *p, const uint8_t *end, int32_t
     return p + 4;
 }
 
+/* Copy with two display-safety filters: skip 4-byte UTF-8 sequences (emoji
+ * etc. — the Montserrat fonts have no glyphs for them, they render as tofu
+ * boxes), and never truncate mid-sequence at the cap boundary. */
 static void copy_str(char *dst, size_t cap, const char *src)
 {
-    size_t n = strlen(src);
-    if (n >= cap) n = cap - 1;
-    memcpy(dst, src, n);
+    size_t n = 0;
+    const unsigned char *s = (const unsigned char *)src;
+    while (*s && n < cap - 1) {
+        if (*s >= 0xF0) {           /* 4-byte lead: skip the whole sequence */
+            s++;
+            while ((*s & 0xC0) == 0x80) s++;
+            continue;
+        }
+        size_t seq = (*s >= 0xE0) ? 3 : (*s >= 0xC0) ? 2 : 1;
+        if (n + seq > cap - 1) break;
+        for (size_t k = 0; k < seq && *s; k++) dst[n++] = (char)*s++;
+    }
     dst[n] = '\0';
 }
 

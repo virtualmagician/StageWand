@@ -17,17 +17,30 @@ final class SimEngine: ObservableObject {
 
     // StageWizard link (OSC/UDP out, HTTP /status poll in). The port fields are Strings so
     // they can back TextFields directly; applyLinkConfig() parses them on every change.
-    @Published var linkEnabled = false {
-        didSet { applyLinkConfig() }
+    // Settings persist across launches; the link is ON by default (localhost host).
+    @Published var linkEnabled = UserDefaults.standard.object(forKey: "linkEnabled") as? Bool ?? true {
+        didSet {
+            UserDefaults.standard.set(linkEnabled, forKey: "linkEnabled")
+            applyLinkConfig()
+        }
     }
-    @Published var linkHost = "127.0.0.1" {
-        didSet { applyLinkConfig() }
+    @Published var linkHost = UserDefaults.standard.string(forKey: "linkHost") ?? "127.0.0.1" {
+        didSet {
+            UserDefaults.standard.set(linkHost, forKey: "linkHost")
+            applyLinkConfig()
+        }
     }
-    @Published var linkOSCPort = "53100" {
-        didSet { applyLinkConfig() }
+    @Published var linkOSCPort = UserDefaults.standard.string(forKey: "linkOSCPort") ?? "53100" {
+        didSet {
+            UserDefaults.standard.set(linkOSCPort, forKey: "linkOSCPort")
+            applyLinkConfig()
+        }
     }
-    @Published var linkHTTPPort = "53200" {
-        didSet { applyLinkConfig() }
+    @Published var linkHTTPPort = UserDefaults.standard.string(forKey: "linkHTTPPort") ?? "53200" {
+        didSet {
+            UserDefaults.standard.set(linkHTTPPort, forKey: "linkHTTPPort")
+            applyLinkConfig()
+        }
     }
     @Published private(set) var linkState = LinkState()
 
@@ -45,6 +58,10 @@ final class SimEngine: ObservableObject {
         started = true
 
         sim_init()
+
+        // didSet doesn't fire for initial values, so push the (persisted or
+        // default-on) link settings down once at startup.
+        applyLinkConfig()
 
         // The timer is scheduled on the main run loop, so its callback is on the
         // main thread — assumeIsolated makes that explicit to the concurrency checker.
