@@ -32,6 +32,10 @@ void showui_hal_get_inputs(showui_inputs_t *out);
 /* AMOLED brightness: MIPI-DCS 0x51 on hardware. 0..255. */
 void showui_hal_set_brightness(uint8_t level);
 
+/* Human-readable device identity, e.g. "StageWand-3F2A" (from the MAC on
+ * hardware, "StageWand-SIM" in the simulator). NUL-terminated; cap >= 24. */
+void showui_hal_get_device_name(char *out, uint32_t cap);
+
 #ifdef __cplusplus
 }
 #endif

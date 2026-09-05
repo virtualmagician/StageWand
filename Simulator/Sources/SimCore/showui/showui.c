@@ -22,7 +22,13 @@
 #include "lvgl.h"
 #include "showui.h"
 #include "showui_hal.h"
+#include "showui_version.h"
 #include "showlink.h"
+
+/* Idle dimming: after this long without a touch the panel drops to a
+ * quarter of its set brightness (AMOLED burn-in + battery); any touch, or a
+ * standing-by change from the host, restores it. */
+#define IDLE_DIM_MS 120000u
 
 /* --- palette --------------------------------------------------------------
  * StageWizard's family palette (Theme.swift on dev), on an AMOLED true-black
@@ -64,6 +70,11 @@ static lv_obj_t *s_sleep_overlay;
 
 static bool s_prev_boot = false, s_prev_pwr = false;
 static bool s_link_live = false;
+
+static uint8_t s_brightness = 255;     /* operator's setting (Setup slider) */
+static bool s_idle_dimmed = false;
+static char s_last_sb_number[SHOWLINK_NUM_MAX];
+static void idle_dim_update(const showlink_state_t *link);
 
 /* Cue-list render bookkeeping: rebuild rows only when the source changed. */
 static uint32_t s_rendered_rev = 0;
@@ -437,6 +448,8 @@ static void status_timer_cb(lv_timer_t *t)
     showlink_get_state(&link);
     bool live = link.enabled && link.online;
 
+    idle_dim_update(&link);
+
     lv_obj_set_style_bg_color(s_link_dot,
         !link.enabled ? COL_LINE : (live ? COL_OK : COL_RED), 0);
 
@@ -637,17 +650,45 @@ static void build_transport_tile(void)
 
     s_toggle_btn = make_transport_button(t, "PAUSE / RESUME", COL_TEXT, toggle_clicked_cb);
     s_stopall_btn = make_transport_button(t, "STOP ALL", COL_ACCENT, stopall_clicked_cb);
-    s_panic_btn = make_transport_button(t, "PANIC", COL_RED, panic_clicked_cb);
+    s_panic_btn = make_transport_button(t, "HOLD TO PANIC", COL_RED, panic_clicked_cb);
     lv_obj_set_style_bg_color(s_panic_btn, lv_color_hex(0x3A1414), 0);
     lv_obj_set_style_bg_color(s_panic_btn, COL_RED, LV_STATE_PRESSED);
+    /* Accidental-tap protection: PANIC fires on a long press (LVGL default
+     * 400 ms), never on a tap. The pressed-state fill is the "arming" cue. */
+    lv_obj_remove_event_cb(s_panic_btn, panic_clicked_cb);
+    lv_obj_add_event_cb(s_panic_btn, panic_clicked_cb, LV_EVENT_LONG_PRESSED, NULL);
 }
 
 static void brightness_changed_cb(lv_event_t *e)
 {
     lv_obj_t *slider = lv_event_get_target_obj(e);
     int v = (int)lv_slider_get_value(slider);
+    s_brightness = (uint8_t)v;
+    s_idle_dimmed = false;
     showui_hal_set_brightness((uint8_t)v);
     lv_label_set_text_fmt(s_bri_value, "%d%%", v * 100 / 255);
+}
+
+/* Idle dimming state machine, driven from the 500 ms status timer. */
+static void idle_dim_update(const showlink_state_t *link)
+{
+    /* A standing-by change means the show moved: treat it as activity so the
+     * operator glances at a bright cue number, not a dimmed one. */
+    if (strcmp(link->standing_by_number, s_last_sb_number) != 0) {
+        strncpy(s_last_sb_number, link->standing_by_number, sizeof(s_last_sb_number) - 1);
+        s_last_sb_number[sizeof(s_last_sb_number) - 1] = '\0';
+        lv_display_trigger_activity(NULL);
+    }
+
+    uint32_t idle = lv_display_get_inactive_time(NULL);
+    if (!s_idle_dimmed && idle > IDLE_DIM_MS && !s_asleep) {
+        uint8_t dim = (uint8_t)(s_brightness / 4);
+        showui_hal_set_brightness(dim < 10 ? 10 : dim);
+        s_idle_dimmed = true;
+    } else if (s_idle_dimmed && idle <= IDLE_DIM_MS) {
+        showui_hal_set_brightness(s_brightness);
+        s_idle_dimmed = false;
+    }
 }
 
 static void build_setup_tile(void)
@@ -699,9 +740,12 @@ static void build_setup_tile(void)
     lv_obj_set_flex_grow(spacer, 1);
 
     make_label(t, &lv_font_montserrat_12, COL_MUTED,
-               "BOOT button = GO   |   PWR = blackout");
-    make_label(t, &lv_font_montserrat_12, COL_LINE,
-               "StageWand on Waveshare ESP32-C6 AMOLED 1.8");
+               "BOOT button = GO   |   PWR = blackout   |   idle dims");
+    char ident[64], name[24];
+    showui_hal_get_device_name(name, sizeof(name));
+    snprintf(ident, sizeof(ident), "%s " LV_SYMBOL_BULLET " v" STAGEWAND_VERSION
+             " " LV_SYMBOL_BULLET " ESP32-C6 AMOLED 1.8", name);
+    make_label(t, &lv_font_montserrat_12, COL_LINE, ident);
 }
 
 /* --- public ---------------------------------------------------------------- */

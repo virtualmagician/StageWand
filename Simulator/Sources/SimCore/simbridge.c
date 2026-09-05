@@ -8,6 +8,7 @@
  * so what redraws here is what the QSPI bus would carry on hardware. Every
  * flush is measured and expressed as estimated device transfer time.
  */
+#include <stdio.h>
 #include <string.h>
 #include <time.h>
 
@@ -258,4 +259,10 @@ void showui_hal_get_inputs(showui_inputs_t *out)
 void showui_hal_set_brightness(uint8_t level)
 {
     s_state.brightness = level; /* device: MIPI-DCS 0x51 via the BSP */
+}
+
+void showui_hal_get_device_name(char *out, uint32_t cap)
+{
+    if (!out || !cap) return;
+    snprintf(out, cap, "StageWand-SIM");
 }

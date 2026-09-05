@@ -35,11 +35,13 @@ func runSnapshotMode(arguments: [String]) {
         }
     }
 
-    // Tap roughly a third of the way through the run; hold for 3 frames.
-    // Clamp the release inside the loop so a tiny --frames value can never
-    // leave the touch stuck pressed in the captured PNG.
+    // Tap roughly a third of the way through the run; hold for --tap-hold
+    // frames (default 3 ≈ a tap; ~80 ≈ a long press for hold-to-confirm
+    // controls). Clamp the release inside the loop so a tiny --frames value
+    // can never leave the touch stuck pressed in the captured PNG.
+    let holdFrames = argumentValue(after: "--tap-hold", in: arguments).flatMap { Int($0) } ?? 3
     let pressFrame = frameCount / 3
-    let releaseFrame = min(pressFrame + 3, max(frameCount - 1, 0))
+    let releaseFrame = min(pressFrame + max(holdFrames, 1), max(frameCount - 1, 0))
 
     let linkHost = argumentValue(after: "--link", in: arguments)
 
