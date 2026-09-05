@@ -8,6 +8,7 @@ idf_component_register(
     SRCS
         "main.c"
         "showui_hal_device.c"
+        "wifi_link.c"
         "${SHOWUI_DIR}/showui.c"
         "${SHOWUI_DIR}/showlink.c"
     INCLUDE_DIRS
@@ -21,4 +22,8 @@ idf_component_register(
         lwip
         esp_wifi
         esp_netif
+        esp_event
+        esp_timer
+        nvs_flash
+        mdns
 )

@@ -1,0 +1,12 @@
+# Partition table for the Waveshare ESP32-C6-Touch-AMOLED-1.8 (16 MB flash, no PSRAM).
+#
+# IDF's stock "single app, large" layout gives the app 0x177000 (1.5 MB), which
+# this firmware already fills to within 2.7 kB -- LVGL 9.5 + Wi-Fi + mDNS is a
+# big image. With 16 MB on the board there is no reason to be tight, so the
+# factory app gets 4 MB and there is room left over for OTA later.
+#
+# Name,     Type, SubType, Offset,   Size,     Flags
+nvs,        data, nvs,     0x9000,   0x6000,
+phy_init,   data, phy,     0xf000,   0x1000,
+factory,    app,  factory, 0x10000,  0x400000,
+storage,    data, spiffs,  ,         0x200000,

@@ -1,0 +1,29 @@
+# Project defaults for the Waveshare ESP32-C6-Touch-AMOLED-1.8 (SKU 33305).
+#
+# Regenerate sdkconfig after editing this file:  rm sdkconfig && idf.py build
+# Anything set here can still be overridden per-developer with `idf.py menuconfig`
+# (that writes sdkconfig, which wins over these defaults).
+
+# --- Flash / partitions -------------------------------------------------------
+# The board carries 16 MB of flash and no PSRAM (see firmware/README.md).
+# The default 2 MB / 1 MB-factory layout cannot hold LVGL + Wi-Fi + mDNS, and
+# even IDF's "single app, large" (1.5 MB) leaves under 3 kB free -- so this
+# project ships its own partitions.csv with a 4 MB factory app.
+CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y
+CONFIG_ESPTOOLPY_FLASHSIZE="16MB"
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
+
+# --- LVGL ---------------------------------------------------------------------
+# showui.c uses these Montserrat sizes; LVGL only compiles in the ones enabled
+# here, so every size referenced by the shared UI must be listed.
+CONFIG_LV_FONT_MONTSERRAT_12=y
+CONFIG_LV_FONT_MONTSERRAT_14=y
+CONFIG_LV_FONT_MONTSERRAT_16=y
+CONFIG_LV_FONT_MONTSERRAT_20=y
+CONFIG_LV_FONT_MONTSERRAT_28=y
+CONFIG_LV_FONT_MONTSERRAT_48=y
+
+# esp_lvgl_port's LVGL tick/timer task wants a 1 kHz scheduler tick for smooth
+# animation and responsive touch; the IDF default of 100 Hz makes both coarse.
+CONFIG_FREERTOS_HZ=1000

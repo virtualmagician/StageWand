@@ -10,4 +10,6 @@ Simulator/dist/
 firmware/showcontroller/build/
 firmware/showcontroller/managed_components/
 firmware/showcontroller/dependencies.lock
+# sdkconfig is generated from the tracked sdkconfig.defaults + per-dev menuconfig
+firmware/showcontroller/sdkconfig
 firmware/showcontroller/sdkconfig.old

@@ -1,0 +1,52 @@
+menu "StageWand"
+
+    config STAGEWAND_WIFI_SSID
+        string "Wi-Fi SSID"
+        default ""
+        help
+            Network StageWand joins in station mode.
+
+    config STAGEWAND_WIFI_PASSWORD
+        string "Wi-Fi password"
+        default ""
+        help
+            WPA2/WPA3 passphrase for STAGEWAND_WIFI_SSID. Left empty for an
+            open network.
+
+    config STAGEWAND_HOST_IP
+        string "StageWizard host IP (blank = discover via mDNS/Bonjour)"
+        default ""
+        help
+            Dotted IPv4 address of the machine running StageWizard, e.g.
+            "192.168.1.42". Leave blank to browse Bonjour for a
+            "_stagewizard._udp" service instead -- this is the normal
+            setting, since StageWizard's IP can change between shows.
+
+    config STAGEWAND_OSC_PORT
+        int "StageWizard OSC command port (UDP)"
+        default 53100
+        range 1 65535
+        help
+            Matches showlink.h's SHOWLINK_DEFAULT_OSC_PORT -- only change
+            this if the host was started with a non-default --osc-port.
+
+    config STAGEWAND_HTTP_PORT
+        int "StageWizard web-remote HTTP port"
+        default 53200
+        range 1 65535
+        help
+            Matches showlink.h's SHOWLINK_DEFAULT_HTTP_PORT -- only change
+            this if the host was started with a non-default --http-port.
+
+    config STAGEWAND_WIFI_MAX_RETRY
+        int "Wi-Fi connect max retries (0 = retry forever)"
+        default 0
+        range 0 1000000
+        help
+            Consecutive failed connection attempts before StageWand gives up
+            on Wi-Fi (the show can still run standalone -- only the
+            StageWizard link is lost). 0 means keep retrying with backoff
+            indefinitely, which is the right choice for an unattended show
+            device.
+
+endmenu

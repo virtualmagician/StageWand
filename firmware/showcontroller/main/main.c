@@ -2,9 +2,10 @@
  * main.c — ShowController firmware entry point for the Waveshare
  * ESP32-C6-Touch-AMOLED-1.8 (SKU 33305).
  *
- * ============================== UNTESTED ================================
- * Written without hardware or an ESP-IDF toolchain present. Nothing here
- * has been compiled or run. See firmware/README.md before building/flashing.
+ * ====================== BUILDS CLEAN, NOT YET RUN ========================
+ * Compiles green for esp32c6 under ESP-IDF v5.5.5 (2026-09-05), but has
+ * never been flashed: every runtime claim is unverified until a board is
+ * connected. See firmware/README.md and docs/bringup.md.
  * ==========================================================================
  *
  * The display/LVGL bring-up sequence mirrors the official example
@@ -19,12 +20,16 @@
  * out through showui_hal_get_inputs() -- the HAL boundary declared in
  * Simulator/Sources/SimCore/showui/showui_hal.h.
  */
+#include <inttypes.h>
 #include <string.h>
 
 #include "bsp/esp-bsp.h"
 #include "driver/gpio.h"
+#include "esp_heap_caps.h"
 #include "esp_idf_version.h"
 #include "esp_log.h"
+#include "esp_system.h"
+#include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
@@ -34,6 +39,7 @@
 #include "showui.h"
 #include "showui_hal.h"
 #include "showui_hal_device.h"
+#include "wifi_link.h"
 
 static const char *TAG = "showcontroller";
 
@@ -89,9 +95,9 @@ static bool s_imu_ready = false;
  * _PKEY_LONG_IRQ via PMU.getIrqStatus()) -- see port_axp2101.cpp's
  * pmu_isr_handler() for the pattern to crib from.
  *
- * Wi-Fi (showui_inputs_t.wifi_connected) is also left stubbed: bringing up
- * Wi-Fi is out of scope for this skeleton and none of the fetched official
- * examples exercise it.
+ * Wi-Fi (showui_inputs_t.wifi_connected) is brought up separately by
+ * wifi_link_start() (wifi_link.c), called from app_main() below -- it owns
+ * that flag independently of this sensor task, see showui_hal_device.h.
  */
 static void sensor_init(void)
 {
@@ -173,14 +179,12 @@ static void sensor_poll_task(void *arg)
             }
         }
 
-        /* TODO: Wi-Fi is not brought up in this skeleton. Once station mode is
-         * connected (esp_wifi + esp_netif, credentials via NVS/provisioning),
-         * set in.wifi_connected from the IP event, and enable the StageWizard
-         * link with:  showlink_configure("<host-ip>", SHOWLINK_DEFAULT_OSC_PORT,
-         * SHOWLINK_DEFAULT_HTTP_PORT, true);  (showlink.h — the same code the
-         * simulator runs; it uses lwIP BSD sockets and is ticked by ShowUI's
-         * own lv_timer, so no extra task is needed). */
-        in.wifi_connected = false;
+        /* wifi_connected is intentionally left at its zero-initialized value
+         * here: wifi_link.c owns that flag via
+         * showui_hal_device_set_wifi_connected(), which showui_hal_device.c
+         * preserves across this task's full-snapshot publish (see
+         * showui_hal_device_publish()'s doc comment). This task knows
+         * nothing about Wi-Fi and should not need to. */
 
         if (s_rtc_ready) {
             pcf85063a_datetime_t dt = {0};
@@ -199,6 +203,21 @@ static void sensor_poll_task(void *arg)
 
         vTaskDelayUntil(&last_wake, pdMS_TO_TICKS(SENSOR_POLL_PERIOD_MS));
     }
+}
+
+/**
+ * Low-rate heap diagnostics, logged every 10 s from an esp_timer callback
+ * (the esp_timer/"Tmr Svc" task -- cheap, no dedicated task/stack needed).
+ * Free heap and the largest contiguous 8-bit-capable block are what we'll
+ * use to size NimBLE's RAM footprint against once BLE bring-up starts (see
+ * docs/showlink.md's "Planned -- BLE fallback transport").
+ */
+static void diag_log_timer_cb(void *arg)
+{
+    (void)arg;
+    ESP_LOGI(TAG, "heap: free=%" PRIu32 " min_free_ever=%" PRIu32 " largest_free_block(8BIT)=%" PRIu32,
+              (uint32_t)esp_get_free_heap_size(), (uint32_t)esp_get_minimum_free_heap_size(),
+              (uint32_t)heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
 }
 
 void app_main(void)
@@ -235,6 +254,19 @@ void app_main(void)
     }
     showui_create();
     bsp_display_unlock();
+
+    /* --- Wi-Fi + StageWizard link: must come after the display/LVGL bring-up
+     * above, since wifi_link.c's background task calls showlink_configure()
+     * under bsp_display_lock()/unlock(). --- */
+    wifi_link_start();
+
+    const esp_timer_create_args_t diag_timer_args = {
+        .callback = &diag_log_timer_cb,
+        .name = "diag_log",
+    };
+    esp_timer_handle_t diag_timer;
+    ESP_ERROR_CHECK(esp_timer_create(&diag_timer_args, &diag_timer));
+    ESP_ERROR_CHECK(esp_timer_start_periodic(diag_timer, 10 * 1000 * 1000));
 
     ESP_LOGI(TAG, "ShowController UI is ready");
 }

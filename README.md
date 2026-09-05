@@ -32,8 +32,11 @@ Simulator/                  Swift package — the macOS simulator
 │   └── AmoledSim/            SwiftUI app: window chrome, inspector panel, --snapshot mode
 └── scripts/build_app.sh      packages a release build into dist/AmoledSim.app
 
-firmware/                   UNTESTED ESP-IDF skeleton for the real board
-└── showcontroller/           see firmware/README.md before building
+firmware/                   ESP-IDF firmware — builds clean for esp32c6 (v5.5.5), not yet run on hardware
+├── flash.sh                  sources ESP-IDF, flashes + opens the serial monitor
+└── showcontroller/           Wi-Fi station + Bonjour host discovery + the shared ShowUI; see firmware/README.md
+
+docs/bringup.md              day-one hardware checklist: identify V1/V2, flash, expected log, compare to the simulator
 
 tools/
 ├── mock_stagewizard.py       stand-in host: full remote surface incl. feedback + cue tags
