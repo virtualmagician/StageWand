@@ -36,6 +36,7 @@
 #include "pcf85063a.h"
 #include "qmi8658.h"
 
+#include "ble_link.h"
 #include "showui.h"
 #include "showui_hal.h"
 #include "showui_hal_device.h"
@@ -259,6 +260,17 @@ void app_main(void)
      * above, since wifi_link.c's background task calls showlink_configure()
      * under bsp_display_lock()/unlock(). --- */
     wifi_link_start();
+
+    /* --- BLE fallback link: same display-bring-up ordering requirement as
+     * wifi_link_start() above (its GAP/GATT callbacks call showlink_ble_*
+     * under bsp_display_lock()/unlock(), see ble_link.h). Called after
+     * wifi_link_start() to mirror the order things come up in, but there is
+     * no hard dependency either way: ble_link_set_wifi_up() (which
+     * wifi_link.c's event handler calls) is safe to call before this line
+     * runs -- it just records the Wi-Fi state and returns until the NimBLE
+     * host has synced. Advertising itself only starts once Wi-Fi is
+     * confirmed down and that sync has happened -- see ble_link.c. --- */
+    ble_link_init();
 
     const esp_timer_create_args_t diag_timer_args = {
         .callback = &diag_log_timer_cb,

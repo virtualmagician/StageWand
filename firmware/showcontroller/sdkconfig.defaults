@@ -27,3 +27,56 @@ CONFIG_LV_FONT_MONTSERRAT_48=y
 # esp_lvgl_port's LVGL tick/timer task wants a 1 kHz scheduler tick for smooth
 # animation and responsive touch; the IDF default of 100 Hz makes both coarse.
 CONFIG_FREERTOS_HZ=1000
+
+# --- Bluetooth (NimBLE) -- StageWand<->StageWizard BLE fallback link ----------
+# main/ble_link.c: a single-connection GATT peripheral that advertises ONLY
+# while Wi-Fi is down (docs/showlink.md's BLE section -- Espressif marks
+# Wi-Fi-connected + BLE-connected coexistence "performance unstable", so this
+# is a switchover, never simultaneous). No pairing/bonding in the shipped
+# contract ("no bonding v1" -- StageWizard's BLEWandLink.swift, dev D28,
+# connects without it), so the settings below drop everything this firmware
+# doesn't use -- NimBLE over Bluedroid (BLE-only, smaller), Central/Observer
+# roles, Security Manager, bond persistence -- and trim the mbuf pools that
+# remain to a single link's actual traffic. Memory is tight here: this board
+# has ~44 KB free heap before BLE (see main.c's diag_log_timer_cb log line),
+# against an estimated 40-80 KB NimBLE footprint per docs/showlink.md -- watch
+# that same heap log after first BLE bring-up and loosen the MSYS counts
+# below if BLE_HS_ENOMEM/ENOMEM shows up.
+CONFIG_BT_ENABLED=y
+CONFIG_BT_NIMBLE_ENABLED=y
+CONFIG_BT_BLUEDROID_ENABLED=n
+
+# StageWand only ever accepts a connection (from StageWizard); it never
+# scans or initiates one itself, so Central/Observer are pure overhead here.
+# Dropping Central also compiles out GATT Client support, since
+# CONFIG_BT_NIMBLE_GATT_CLIENT depends on CONFIG_BT_NIMBLE_ROLE_CENTRAL.
+CONFIG_BT_NIMBLE_ROLE_PERIPHERAL=y
+CONFIG_BT_NIMBLE_ROLE_CENTRAL=n
+CONFIG_BT_NIMBLE_ROLE_OBSERVER=n
+
+# Exactly one StageWizard central at a time. The Kconfig help text for this
+# option notes each connection costs ~1 KB DRAM on ESP32-C6/C2/H2.
+CONFIG_BT_NIMBLE_MAX_CONNECTIONS=1
+
+# StageWizard negotiates ~185 (docs/showlink.md); 256 gives NimBLE's opening
+# offer some headroom without reaching for the 512-byte ATT/GATT spec max.
+# ble_link.c still reads back whatever MTU is actually negotiated via
+# ble_att_mtu() before handing showlink its max_chunk.
+CONFIG_BT_NIMBLE_ATT_PREFERRED_MTU=256
+
+# No pairing/bonding is ever attempted in this contract, so disable the
+# Security Manager outright (rather than leaving it enabled-but-idle) and
+# turn off bond persistence -- both save NimBLE host RAM/flash.
+CONFIG_BT_NIMBLE_SECURITY_ENABLE=n
+CONFIG_BT_NIMBLE_NVS_PERSIST=n
+
+# MSYS is NimBLE's system-level mbuf pool; its Kconfig help says MSYS_1 backs
+# "prepare write & prepare responses" plus general ATT/GATT payload buffers.
+# showlink's own framing keeps every RX write within one chunk no larger
+# than (negotiated MTU - 3), so ATT Prepare Write is never exercised, and
+# MAX_CONNECTIONS=1 above means there's no concurrent-peer pressure on
+# either pool. Cut back from the ESP32-C6 defaults (24 blocks each) to a
+# count sized for one link's ping/heartbeat/GO/cue-list-burst traffic with
+# a few frames of headroom, not a multi-connection server's.
+CONFIG_BT_NIMBLE_MSYS_1_BLOCK_COUNT=8
+CONFIG_BT_NIMBLE_MSYS_2_BLOCK_COUNT=8

@@ -9,6 +9,7 @@ idf_component_register(
         "main.c"
         "showui_hal_device.c"
         "wifi_link.c"
+        "ble_link.c"
         "${SHOWUI_DIR}/showui.c"
         "${SHOWUI_DIR}/showlink.c"
     INCLUDE_DIRS
@@ -26,4 +27,5 @@ idf_component_register(
         esp_timer
         nvs_flash
         mdns
+        bt
 )

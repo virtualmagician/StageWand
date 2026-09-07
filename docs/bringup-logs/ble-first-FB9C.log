@@ -1,0 +1,195 @@
+# StageWand-FB9C — first Bluetooth link, 2026-09-07
+# Firmware with NimBLE + memory trim; no Wi-Fi credentials, so the wand advertises from boot.
+# StageWizard v1.8.0 (BLE host rides the OSC setting) connected, negotiated MTU 256, subscribed -> showlink attached.
+
+ESP-ROM:esp32c6-20220919
+Build:Sep 19 2022
+rst:0x15 (USB_UART_HPSYS),boot:0x7f (SPI_FAST_FLASH_BOOT)
+Saved PC:0x4001a36e
+SPIWP:0xee
+mode:DIO, clock div:2
+load:0x40875730,len:0x16f4
+load:0x4086b910,len:0xd58
+load:0x4086e610,len:0x3200
+entry 0x4086b91a
+I (23) boot: ESP-IDF v5.5.5 2nd stage bootloader
+I (23) boot: compile time Sep  5 2026 09:01:46
+I (24) boot: chip revision: v0.2
+I (24) boot: efuse block revision: v0.3
+I (26) boot.esp32c6: SPI Speed      : 80MHz
+I (30) boot.esp32c6: SPI Mode       : DIO
+I (34) boot.esp32c6: SPI Flash Size : 16MB
+I (38) boot: Enabling RNG early entropy source...
+I (42) boot: Partition Table:
+I (45) boot: ## Label            Usage          Type ST Offset   Length
+I (51) boot:  0 nvs              WiFi data        01 02 00009000 00006000
+I (58) boot:  1 phy_init         RF data          01 01 0000f000 00001000
+I (64) boot:  2 factory          factory app      00 00 00010000 00400000
+I (71) boot:  3 storage          Unknown data     01 82 00410000 00200000
+I (78) boot: End of partition table
+I (81) esp_image: segment 0: paddr=00010020 vaddr=42150020 size=5d394h (381844) map
+I (161) esp_image: segment 1: paddr=0006d3bc vaddr=40800000 size=02c5ch ( 11356) load
+I (164) esp_image: segment 2: paddr=00070020 vaddr=42000020 size=14172ch (1316652) map
+I (416) esp_image: segment 3: paddr=001b1754 vaddr=40802c5c size=222fch (140028) load
+I (447) esp_image: segment 4: paddr=001d3a58 vaddr=40824f60 size=04bbch ( 19388) load
+I (461) boot: Loaded app from partition at offset 0x10000
+I (461) boot: Disabling RNG early entropy source...
+I (471) cpu_start: Unicore app
+I (480) cpu_start: GPIO 17 and 16 are used as console UART I/O pins
+I (480) cpu_start: Pro cpu start user code
+I (480) cpu_start: cpu freq: 160000000 Hz
+I (482) app_init: Application information:
+I (486) app_init: Project name:     showcontroller
+I (490) app_init: App version:      c4b5a14-dirty
+I (495) app_init: Compile time:     Sep  7 2026 20:03:18
+I (500) app_init: ELF file SHA256:  e7ac3d695...
+I (504) app_init: ESP-IDF:          v5.5.5
+I (508) efuse_init: Min chip rev:     v0.0
+I (512) efuse_init: Max chip rev:     v0.99 
+I (516) efuse_init: Chip rev:         v0.2
+I (520) heap_init: Initializing. RAM available for dynamic allocation:
+I (526) heap_init: At 40835060 len 000475B0 (285 KiB): RAM
+I (531) heap_init: At 4087C610 len 00002F54 (11 KiB): RAM
+I (536) heap_init: At 50000000 len 00003FE8 (15 KiB): RTCRAM
+I (542) spi_flash: detected chip: generic
+I (545) spi_flash: flash io: dio
+I (549) sleep_gpio: Configure to isolate all GPIO pins in sleep state
+I (555) sleep_gpio: Enable automatic switching of GPIO sleep configuration
+I (570) main_task: Started on CPU0
+I (573) main_task: Calling app_main()
+I (977) ESP32-C6-Touch-AMOLED-1.8: Detected board variant: V2 (CO5300 + CST820)
+I (977) showcontroller: Starting ShowController on V2 (CO5300 + CST820)
+I (980) LVGL: Starting LVGL task
+I (982) ESP32-C6-Touch-AMOLED-1.8: Initialize QSPI display for V2 (CO5300 + CST820)
+I (990) co5300: version: 2.1.0
+I (992) co5300_spi: LCD panel create success, version: 2.1.0
+W (1078) co5300_spi: The 3Ah command has been used and will be overwritten by external initialization sequence
+I (1210) CST816S: IC id: 183
+I (1211) ESP32-C6-Touch-AMOLED-1.8: Backlight on
+I (1212) PCF85063A: PCF85063A initialized successfully
+I (1213) QMI8658: QMI8658 initialized successfully
+I (1398) pp: pp rom version: 5b8dcfa
+I (1399) net80211: net80211 rom version: 5b8dcfa
+I (1400) wifi:wifi driver task: 4085b2c0, prio:23, stack:6656, core=0
+I (1407) wifi:wifi firmware version: b9f67df
+I (1408) wifi:wifi certification version: v7.0
+I (1409) wifi:config NVS flash: enabled
+I (1413) wifi:config nano formatting: disabled
+I (1417) wifi:mac_version:HAL_MAC_ESP32AX_761,ut_version:N, band mode:0x1
+I (1424) wifi:Init data frame dynamic rx buffer num: 12
+I (1429) wifi:Init static rx mgmt buffer num: 5
+I (1433) wifi:Init management short buffer num: 32
+I (1437) wifi:Init dynamic tx buffer num: 12
+I (1441) wifi:Init static tx FG buffer num: 2
+I (1445) wifi:Init static rx buffer size: 1700 (rxctrl:92, csi:512)
+I (1452) wifi:Init static rx buffer num: 6
+I (1455) wifi:Init dynamic rx buffer num: 12
+I (1461) wifi_init: rx ba win: 4
+I (1462) wifi_init: accept mbox: 6
+I (1465) wifi_init: tcpip mbox: 32
+I (1468) wifi_init: udp mbox: 6
+I (1471) wifi_init: tcp mbox: 6
+I (1474) wifi_init: tcp tx win: 5760
+I (1477) wifi_init: tcp rx win: 5760
+I (1481) wifi_init: tcp mss: 1440
+I (1484) wifi_init: WiFi IRAM OP enabled
+I (1487) wifi_init: WiFi RX IRAM OP enabled
+I (1491) wifi_init: WiFi SLP IRAM OP enabled
+I (1496) phy_init: phy_version 344,0b4366d,Apr 10 2026,13:53:11
+I (1550) phy_init: Saving new calibration data due to checksum failure or outdated calibration data, mode(0)
+I (1559) wifi:11ax coex: WDEVAX_PTI0(0x55777555), WDEVAX_PTI1(0x00003377).
+
+I (1560) wifi:mode : sta (98:a3:16:a7:fb:9c)
+I (1560) wifi:enable tsf
+I (1564) wifi_link: Wi-Fi station starting, SSID ""
+I (1566) BLE_INIT: Using main XTAL as clock source, chip ver: 2
+I (1572) BLE_INIT: ble controller commit:[4adb29e,7f63735]
+I (1583) BLE_INIT: Bluetooth MAC: 98:a3:16:a7:fb:9e
+I (1590) phy: libbtbb version: e4897a5, Apr 10 2026, 13:53:26
+I (1593) ble_link: registered service 0x1800 handle=1
+I (1596) ble_link: registered characteristic 0x2a00 def_handle=2 val_handle=3
+I (1603) ble_link: registered characteristic 0x2a01 def_handle=4 val_handle=5
+I (1609) ble_link: registered service 0x1801 handle=6
+I (1614) ble_link: registered characteristic 0x2a05 def_handle=7 val_handle=8
+I (1621) ble_link: registered characteristic 0x2b3a def_handle=10 val_handle=11
+I (1628) ble_link: registered characteristic 0x2b29 def_handle=12 val_handle=13
+I (1635) ble_link: registered service 8b0f4f44-5a5b-4ec1-a0e9-77616e640001 handle=14
+I (1643) ble_link: registered characteristic 8b0f4f44-5a5b-4ec1-a0e9-77616e640002 def_handle=15 val_handle=16
+I (1652) ble_link: registered characteristic 8b0f4f44-5a5b-4ec1-a0e9-77616e640003 def_handle=17 val_handle=18
+W (1664) NimBLE: Failed to persist local IRK (rc=8)
+I (1667) NimBLE: GAP procedure initiated: stop advertising.
+
+I (1673) NimBLE: Failed to restore IRKs from store; status=8
+
+I (1677) ble_link: NimBLE host synced (own_addr_type=0)
+I (1683) NimBLE: GAP procedure initiated: advertise; 
+I (1687) NimBLE: disc_mode=2
+I (1690) NimBLE:  adv_channel_map=0 own_addr_type=0 adv_filter_policy=0 adv_itvl_min=48 adv_itvl_max=96
+I (1699) NimBLE: 
+
+I (1702) ble_link: BLE advertising started as "StageWand-FB9C"
+I (1707) ble_link: BLE link initialized; advertising deferred until Wi-Fi is down and the host syncs
+I (1715) showcontroller: ShowController UI is ready
+I (1720) main_task: Returned from app_main()
+I (8592) ble_link: BLE connected: peer=fc:b2:14:d7:e6:a6 conn_handle=0
+I (8592) NimBLE: GAP procedure initiated: 
+I (8592) NimBLE: connection parameter update; conn_handle=0 itvl_min=6 itvl_max=12 latency=0 supervision_timeout=256 min_ce_len=0 max_ce_len=0
+I (8603) NimBLE: 
+
+I (9012) ble_link: BLE MTU updated: conn_handle=0 mtu=256
+I (9431) ble_link: BLE subscribe event: conn_handle=0 attr_handle=8 cur_notify=0
+I (9731) ble_link: BLE subscribe event: conn_handle=0 attr_handle=18 cur_notify=1
+I (9731) ble_link: showlink attached over BLE (conn_handle=0, mtu=256, max_chunk=253)
+I (9793) NimBLE: GATT procedure initiated: notify; 
+I (9793) NimBLE: att_handle=18
+
+I (10824) NimBLE: GATT procedure initiated: notify; 
+I (10824) NimBLE: att_handle=18
+
+I (11715) showcontroller: heap: free=92040 min_free_ever=89876 largest_free_block(8BIT)=73728
+I (11832) NimBLE: GATT procedure initiated: notify; 
+I (11832) NimBLE: att_handle=18
+
+I (12837) NimBLE: GATT procedure initiated: notify; 
+I (12837) NimBLE: att_handle=18
+
+I (13846) NimBLE: GATT procedure initiated: notify; 
+I (13846) NimBLE: att_handle=18
+
+I (14898) NimBLE: GATT procedure initiated: notify; 
+I (14898) NimBLE: att_handle=18
+
+I (15910) NimBLE: GATT procedure initiated: notify; 
+I (15910) NimBLE: att_handle=18
+
+I (16911) NimBLE: GATT procedure initiated: notify; 
+I (16911) NimBLE: att_handle=18
+
+I (17357) NimBLE: GATT procedure initiated: notify; 
+I (17358) NimBLE: att_handle=18
+
+I (17928) NimBLE: GATT procedure initiated: notify; 
+I (17928) NimBLE: att_handle=18
+
+I (18935) NimBLE: GATT procedure initiated: notify; 
+I (18935) NimBLE: att_handle=18
+
+I (19940) NimBLE: GATT procedure initiated: notify; 
+I (19940) NimBLE: att_handle=18
+
+I (20948) NimBLE: GATT procedure initiated: notify; 
+I (20948) NimBLE: att_handle=18
+
+I (21715) showcontroller: heap: free=91160 min_free_ever=88980 largest_free_block(8BIT)=73728
+I (22043) NimBLE: GATT procedure initiated: notify; 
+I (22043) NimBLE: att_handle=18
+
+I (23075) NimBLE: GATT procedure initiated: notify; 
+I (23075) NimBLE: att_handle=18
+
+I (24095) NimBLE: GATT procedure initiated: notify; 
+I (24095) NimBLE: att_handle=18
+
+I (25092) NimBLE: GATT procedure initiated: notify; 
+I (25092) NimBLE: att_handle=18
+

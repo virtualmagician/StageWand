@@ -29,6 +29,7 @@
 #include "nvs_flash.h"
 #include "sdkconfig.h"
 
+#include "ble_link.h"
 #include "showlink.h"
 #include "showui_hal_device.h"
 #include "wifi_link.h"
@@ -112,6 +113,11 @@ static void wifi_event_handler(void *arg, esp_event_base_t base, int32_t id, voi
         ESP_LOGW(TAG, "Wi-Fi disconnected (reason=%d), retry %" PRIu32 " in %" PRIu32 " ms",
                  d != NULL ? d->reason : -1, s_retry_count, s_backoff_ms);
         schedule_reconnect();
+        /* Wi-Fi is down: BLE is free to advertise again (coexistence
+         * switchover, see docs/showlink.md's BLE section). ble_gap_* calls
+         * are documented safe from any task, so no display lock here --
+         * see ble_link.h. */
+        ble_link_set_wifi_up(false);
         xSemaphoreGive(s_wake_sem);
         return;
     }
@@ -123,6 +129,10 @@ static void wifi_event_handler(void *arg, esp_event_base_t base, int32_t id, voi
         s_backoff_ms = WIFI_LINK_BACKOFF_MIN_MS;
         s_sta_connected = true;
         showui_hal_device_set_wifi_connected(true);
+        /* Wi-Fi is up: stop advertising / drop any BLE central, since
+         * Wi-Fi-connected + BLE-connected coexistence is unstable per
+         * Espressif (docs/showlink.md). */
+        ble_link_set_wifi_up(true);
         xSemaphoreGive(s_wake_sem);
         return;
     }

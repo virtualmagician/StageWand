@@ -23,7 +23,9 @@ firmware/showcontroller/
     ├── showui_hal_device.c     # implements showui_hal_get_inputs / set_brightness / get_device_name
     ├── showui_hal_device.h     # private glue between the two above
     ├── wifi_link.c             # Wi-Fi station bring-up + StageWizard host discovery
-    └── wifi_link.h             # public entry point: wifi_link_start()
+    ├── wifi_link.h             # public entry point: wifi_link_start()
+    ├── ble_link.c              # NimBLE peripheral: showlink's BLE fallback transport
+    └── ble_link.h              # public entry points: ble_link_init(), ble_link_set_wifi_up()
 ```
 
 `showui_create()` (the actual screens) is **not** in this tree — see
@@ -86,6 +88,44 @@ station state independently of the sensor-polling task (see
 (`showlink_configure("", 0, 0, false)`) and Wi-Fi reconnects with
 exponential backoff (1 s up to 30 s) logging the disconnect reason each
 time.
+
+## Bluetooth fallback
+
+`main/ble_link.c` is a NimBLE peripheral that gives showlink a second
+transport for when Wi-Fi isn't available — a venue with no usable network,
+or Wi-Fi mid-reconnect — so the wand can still reach StageWizard.
+
+**When it advertises.** Only while Wi-Fi is down. Espressif documents
+Wi-Fi-connected + BLE-connected coexistence on this chip as "performance
+unstable," so this is a switchover, never both at once:
+`wifi_link.c` calls `ble_link_set_wifi_up(true)` from its
+`IP_EVENT_STA_GOT_IP` handler (stop advertising; drop any BLE central) and
+`ble_link_set_wifi_up(false)` from its `WIFI_EVENT_STA_DISCONNECTED` handler
+(resume advertising). BLE is therefore only ever reachable when the wand
+has no working Wi-Fi link at all.
+
+**How StageWizard connects.** StageWizard's BLEWandLink.swift (dev D28+, the
+`v1.7.x` era) is a CoreBluetooth central with standing auto-reconnect — it
+finds the wand by the advertised service UUID
+(`8B0F4F44-5A5B-4EC1-A0E9-77616E640001`) and local name (`StageWand-XXXX`,
+the same MAC-derived name shown on the Setup screen), not by pairing. The
+**first** time this happens on a given Mac, macOS prompts for the app's
+Bluetooth permission (System Settings → Privacy & Security → Bluetooth) —
+grant it once and StageWizard reconnects silently after that. There's no
+pairing/bonding step: the GATT link carries the same OSC-over-length-prefixed-
+frames protocol as Wi-Fi, just switched to BLE notify/write instead of
+UDP/HTTP, and showlink reassembles frames the same way regardless of which
+transport delivered them.
+
+**The switchover rule, restated:** BLE is the fallback, not a second
+simultaneous path. If Wi-Fi is up, BLE is not advertising and cannot be
+connected to; if Wi-Fi drops, the wand starts advertising within one
+`WIFI_EVENT_STA_DISCONNECTED` event, and StageWizard's auto-reconnect picks
+it up from there. See `docs/showlink.md`'s BLE section for the full wire
+contract (service/characteristic UUIDs, framing, connection-parameter
+choices) and `main/ble_link.h`'s doc comment for the concurrency rule
+(`bsp_display_lock()`/`unlock()` around every call into showlink from a
+NimBLE host callback, mirroring `wifi_link.c`'s `configure_link_locked()`).
 
 ## V1 vs V2 boards
 
