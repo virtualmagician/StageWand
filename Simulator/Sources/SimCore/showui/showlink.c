@@ -99,6 +99,18 @@ static struct {
     bool elapsed_seen; uint32_t elapsed_ms;
 } L = { .osc_fd = -1, .http_fd = -1 };
 
+/* BLE transport (see showlink.h). rx reassembles length-prefixed frames. */
+static struct {
+    bool attached;
+    showlink_ble_send_fn send;
+    void *ctx;
+    uint32_t max_chunk;
+    uint8_t rx[1024];
+    uint32_t rx_len;
+} B;
+
+#define BLE_FRAME_MAX 512u
+
 /* Full cue list (proposed feedback): double-buffered so a half-received
  * refresh never tears the rendered list. */
 typedef struct {
@@ -140,8 +152,9 @@ static bool osc_path_dead(void)
  * and — on hosts with a confirmed heartbeat — the feed is not stale. */
 static bool osc_path_ok(void)
 {
+    if (!L.enabled && !B.attached) return false;
     if (!L.osc_seen || !L.ping_ever) return false;
-    if (osc_path_dead()) return false;
+    if (!B.attached && osc_path_dead()) return false;   /* ICMP is a UDP-only signal */
     if (L.hb_detected &&
         age_of(L.osc_seen, L.osc_ms, L.now_ms) >= OSC_FRESH_MS) return false;
     return true;
@@ -176,9 +189,24 @@ static void close_all(void)
 
 /* ---------- OSC encoding (address-only messages) --------------------------- */
 
+static void ble_send_frame(const uint8_t *msg, uint32_t len)
+{
+    if (!B.attached || !B.send || len > BLE_FRAME_MAX) return;
+    uint8_t frame[2 + BLE_FRAME_MAX];
+    frame[0] = (uint8_t)(len >> 8);
+    frame[1] = (uint8_t)(len & 0xFF);
+    memcpy(frame + 2, msg, len);
+    uint32_t total = len + 2, off = 0;
+    uint32_t chunk = B.max_chunk < 20 ? 20 : B.max_chunk;
+    while (off < total) {
+        uint32_t n = total - off < chunk ? total - off : chunk;
+        if (!B.send(frame + off, n, B.ctx)) return;   /* link gone; detach follows */
+        off += n;
+    }
+}
+
 static void osc_send_address(const char *addr)
 {
-    if (!L.enabled || L.osc_fd < 0 || !L.addr_ok) return;
     uint8_t buf[96];
     size_t alen = strlen(addr);
     size_t apad = ((alen + 1) + 3) & ~(size_t)3;   /* string + NUL, 4-aligned */
@@ -186,6 +214,11 @@ static void osc_send_address(const char *addr)
     memset(buf, 0, apad + 4);
     memcpy(buf, addr, alen);
     buf[apad] = ',';                                /* ",\0\0\0": no arguments */
+    if (B.attached) {                               /* switchover: BLE owns the pipe */
+        ble_send_frame(buf, (uint32_t)(apad + 4));
+        return;
+    }
+    if (!L.enabled || L.osc_fd < 0 || !L.addr_ok) return;
     ssize_t n = send(L.osc_fd, buf, apad + 4, 0);   /* connected UDP socket */
     if (n < 0 && errno != EAGAIN && errno != EWOULDBLOCK) {
         note_osc_error();
@@ -565,7 +598,7 @@ void showlink_configure(const char *host_ip, uint16_t osc_port,
 void showlink_tick(uint32_t now_ms)
 {
     L.now_ms = now_ms;
-    if (!L.enabled) return;
+    if (!L.enabled && !B.attached) return;
 
     /* Implicit subscription keepalive (harmless on hosts without feedback:
      * unknown addresses are ignored silently). */
@@ -575,11 +608,11 @@ void showlink_tick(uint32_t now_ms)
         L.ping_ever = true;
     }
 
-    osc_recv_all(now_ms);
+    if (L.enabled) osc_recv_all(now_ms);
 
     /* HTTP fallback poll — suppressed while the OSC path is healthy; a quiet
-     * host needs no polls. */
-    if (!osc_path_ok()) {
+     * host needs no polls. Never over BLE (no sockets there). */
+    if (L.enabled && !B.attached && !osc_path_ok()) {
         if (L.http_phase == HTTP_IDLE &&
             (!L.poll_ever || (uint32_t)(now_ms - L.last_poll_ms) >= POLL_INTERVAL_MS)) {
             L.last_poll_ms = now_ms;
@@ -587,14 +620,14 @@ void showlink_tick(uint32_t now_ms)
             http_start(now_ms);
         }
     }
-    http_advance(now_ms);
+    if (L.enabled) http_advance(now_ms);
 }
 
 void showlink_get_state(showlink_state_t *out)
 {
     if (!out) return;
     memset(out, 0, sizeof(*out));
-    out->enabled = L.enabled;
+    out->enabled = L.enabled || B.attached;
     /* Ages vs. the clock of the latest tick — at 10 Hz ticking that is at
      * most ~100 ms stale, well inside the freshness windows.
      *
@@ -607,11 +640,13 @@ void showlink_get_state(showlink_state_t *out)
     uint32_t http_age = age_of(L.http_seen, L.http_ms, L.now_ms);
     bool osc_path = osc_path_ok();
     bool http_fresh = http_age < HTTP_FRESH_MS;
-    out->online = L.enabled && (osc_path || http_fresh);
+    out->online = (L.enabled || B.attached) && (osc_path || (L.enabled && http_fresh));
     out->transport = !out->online ? SHOWLINK_TRANSPORT_NONE
-                   : (osc_path ? SHOWLINK_TRANSPORT_OSC : SHOWLINK_TRANSPORT_HTTP);
+                   : (B.attached ? SHOWLINK_TRANSPORT_BLE
+                   : (osc_path ? SHOWLINK_TRANSPORT_OSC : SHOWLINK_TRANSPORT_HTTP));
     out->last_status_age_ms = osc_age < http_age ? osc_age : http_age;
-    copy_str(out->host, sizeof(out->host), L.enabled ? L.host : "");
+    copy_str(out->host, sizeof(out->host),
+             B.attached ? "Bluetooth" : (L.enabled ? L.host : ""));
     copy_str(out->standing_by_number, sizeof(out->standing_by_number), L.sb_number);
     copy_str(out->standing_by_name, sizeof(out->standing_by_name), L.sb_name);
     out->running_count = L.running_count;
@@ -662,4 +697,49 @@ bool showlink_get_cue(int32_t index, char *number, uint32_t number_cap,
     if (name && name_cap) copy_str(name, name_cap, CL.live[index].name);
     if (color_tag && tag_cap) copy_str(color_tag, tag_cap, CL.live[index].tag);
     return true;
+}
+
+/* BLE transport hooks ------------------------------------------------------- */
+
+void showlink_ble_attach(showlink_ble_send_fn send, void *ctx, uint32_t max_chunk)
+{
+    B.send = send;
+    B.ctx = ctx;
+    B.max_chunk = max_chunk;
+    B.rx_len = 0;
+    B.attached = (send != NULL);
+    /* Fresh subscription: the host sends a full snapshot on connect. */
+    L.osc_seen = false;
+    L.ping_ever = false;
+}
+
+void showlink_ble_detach(void)
+{
+    B.attached = false;
+    B.send = NULL;
+    B.rx_len = 0;
+    /* Whatever transport comes next must prove itself again. */
+    L.osc_seen = false;
+}
+
+bool showlink_ble_attached(void) { return B.attached; }
+
+void showlink_ble_receive(const uint8_t *data, uint32_t len)
+{
+    if (!B.attached || !data || !len) return;
+    if (B.rx_len + len > sizeof(B.rx)) { B.rx_len = 0; return; }   /* desync: resync on next frame */
+    memcpy(B.rx + B.rx_len, data, len);
+    B.rx_len += len;
+    for (;;) {
+        if (B.rx_len < 2) return;
+        uint32_t flen = ((uint32_t)B.rx[0] << 8) | B.rx[1];
+        if (flen == 0 || flen > BLE_FRAME_MAX) { B.rx_len = 0; return; }
+        if (B.rx_len < 2 + flen) return;                    /* wait for the rest */
+        if (!(flen >= 8 && memcmp(B.rx + 2, "#bundle\0", 8) == 0)) {
+            osc_ingest(B.rx + 2, flen, L.now_ms);
+        }
+        uint32_t consumed = 2 + flen;
+        memmove(B.rx, B.rx + consumed, B.rx_len - consumed);
+        B.rx_len -= consumed;
+    }
 }

@@ -117,10 +117,48 @@ static void label_set_if_changed(lv_obj_t *label, const char *text)
     if (strcmp(lv_label_get_text(label), text) != 0) lv_label_set_text(label, text);
 }
 
+/* Inert-control look: pale fill with DARK text, fully under our control —
+ * LVGL's default theme otherwise applies a grey colour filter to disabled
+ * buttons that washes the fill pale while leaving the label light (seen on
+ * the real AMOLED: unreadable). The filter is switched off per button at
+ * creation (see make_*_button); enabled_text is the label's normal colour. */
+#define COL_INERT      lv_color_hex(0xAAB4BC)
+#define COL_INERT_TEXT lv_color_hex(0x0B0D10)
+
+/* We deliberately do NOT use LV_STATE_DISABLED: the default theme's grey
+ * colour filter for that state overrides local styles on the AMOLED and
+ * leaves light text on a pale fill. Inert = our own palette swap on the
+ * normal state + the clickable flag removed. Each button registers its live
+ * look once; set_enabled() flips between the two. */
+typedef struct { lv_obj_t *btn; lv_color_t bg, border, text; } inert_entry_t;
+static inert_entry_t s_inert[8];
+static int s_inert_count = 0;
+
+static void inert_register(lv_obj_t *btn, lv_color_t bg, lv_color_t border, lv_color_t text)
+{
+    if (s_inert_count < 8) {
+        s_inert[s_inert_count++] = (inert_entry_t){ btn, bg, border, text };
+    }
+}
+
 static void set_enabled(lv_obj_t *btn, bool enabled)
 {
-    if (enabled) lv_obj_remove_state(btn, LV_STATE_DISABLED);
-    else lv_obj_add_state(btn, LV_STATE_DISABLED);
+    for (int i = 0; i < s_inert_count; i++) {
+        if (s_inert[i].btn != btn) continue;
+        lv_obj_t *label = lv_obj_get_child(btn, 0);
+        if (enabled) {
+            lv_obj_set_style_bg_color(btn, s_inert[i].bg, 0);
+            lv_obj_set_style_border_color(btn, s_inert[i].border, 0);
+            if (label) lv_obj_set_style_text_color(label, s_inert[i].text, 0);
+            lv_obj_add_flag(btn, LV_OBJ_FLAG_CLICKABLE);
+        } else {
+            lv_obj_set_style_bg_color(btn, COL_INERT, 0);
+            lv_obj_set_style_border_color(btn, COL_INERT, 0);
+            if (label) lv_obj_set_style_text_color(label, COL_INERT_TEXT, 0);
+            lv_obj_remove_flag(btn, LV_OBJ_FLAG_CLICKABLE);
+        }
+        return;
+    }
 }
 
 /* --- events ---------------------------------------------------------------- */
@@ -306,8 +344,6 @@ static void apply_offline_state(void)
     lv_obj_set_style_text_color(s_cue_num, COL_LINE, 0);
     lv_obj_add_flag(s_cue_prog, LV_OBJ_FLAG_HIDDEN);
     set_enabled(s_go_btn, false);
-    /* State styles don't propagate to child labels — recolor explicitly. */
-    lv_obj_set_style_text_color(s_go_label, COL_LINE, 0);
     set_enabled(s_prev_btn, false);
     set_enabled(s_next_btn, false);
     set_enabled(s_toggle_btn, false);
@@ -367,7 +403,6 @@ static void apply_live_state(const showlink_state_t *link)
     }
 
     set_enabled(s_go_btn, true);
-    lv_obj_set_style_text_color(s_go_label, lv_color_black(), 0);
     set_enabled(s_prev_btn, true);
     set_enabled(s_next_btn, true);
     set_enabled(s_toggle_btn, true);
@@ -472,6 +507,10 @@ static void status_timer_cb(lv_timer_t *t)
         /* "quiet" = healthy subscription, host just has nothing new to say */
         snprintf(buf, sizeof(buf), "Link    OSC %s " LV_SYMBOL_BULLET " %us",
                  age_s >= 3 ? "quiet" : "feedback", age_s);
+    } else if (link.transport == SHOWLINK_TRANSPORT_BLE) {
+        unsigned age_s = (unsigned)(link.last_status_age_ms / 1000u);
+        snprintf(buf, sizeof(buf), "Link    Bluetooth %s " LV_SYMBOL_BULLET " %us",
+                 age_s >= 3 ? "quiet" : "feedback", age_s);
     } else if (link.transport == SHOWLINK_TRANSPORT_HTTP) {
         snprintf(buf, sizeof(buf), "Link    HTTP poll " LV_SYMBOL_BULLET " %us",
                  (unsigned)(link.last_status_age_ms / 1000u));
@@ -517,8 +556,7 @@ static lv_obj_t *make_pill_button(lv_obj_t *parent, const char *text, lv_color_t
     lv_obj_set_style_border_width(btn, 1, 0);
     lv_obj_set_style_border_color(btn, color, 0);
     lv_obj_set_style_shadow_width(btn, 0, 0);
-    lv_obj_set_style_border_color(btn, COL_LINE, LV_STATE_DISABLED);
-    lv_obj_set_style_bg_color(btn, COL_BG, LV_STATE_DISABLED);
+    inert_register(btn, COL_SURFACE, color, color);
     lv_obj_t *l = make_label(btn, &lv_font_montserrat_14, color, text);
     lv_obj_center(l);
     lv_obj_add_event_cb(btn, cb, LV_EVENT_CLICKED, NULL);
@@ -562,7 +600,7 @@ static void build_cue_tile(void)
     lv_obj_set_style_radius(s_go_btn, LV_RADIUS_CIRCLE, 0);
     lv_obj_set_style_bg_color(s_go_btn, COL_GO, 0);
     lv_obj_set_style_bg_color(s_go_btn, COL_GO_PRESS, LV_STATE_PRESSED);
-    lv_obj_set_style_bg_color(s_go_btn, COL_SURFACE, LV_STATE_DISABLED);
+    inert_register(s_go_btn, COL_GO, COL_GO, lv_color_black());
     lv_obj_set_style_shadow_width(s_go_btn, 0, 0);
     s_go_label = make_label(s_go_btn, &lv_font_montserrat_28, lv_color_black(), "GO");
     lv_obj_center(s_go_label);
@@ -620,8 +658,7 @@ static lv_obj_t *make_transport_button(lv_obj_t *parent, const char *text,
     lv_obj_set_style_border_width(btn, 2, 0);
     lv_obj_set_style_border_color(btn, color, 0);
     lv_obj_set_style_shadow_width(btn, 0, 0);
-    lv_obj_set_style_border_color(btn, COL_LINE, LV_STATE_DISABLED);
-    lv_obj_set_style_bg_color(btn, COL_BG, LV_STATE_DISABLED);
+    inert_register(btn, COL_SURFACE, color, color);
     lv_obj_t *l = make_label(btn, &lv_font_montserrat_20, color, text);
     lv_obj_center(l);
     lv_obj_add_event_cb(btn, cb, LV_EVENT_CLICKED, NULL);
@@ -653,6 +690,7 @@ static void build_transport_tile(void)
     s_panic_btn = make_transport_button(t, "HOLD TO PANIC", COL_RED, panic_clicked_cb);
     lv_obj_set_style_bg_color(s_panic_btn, lv_color_hex(0x3A1414), 0);
     lv_obj_set_style_bg_color(s_panic_btn, COL_RED, LV_STATE_PRESSED);
+    s_inert[s_inert_count - 1].bg = lv_color_hex(0x3A1414);  /* keep the tint as its live look */
     /* Accidental-tap protection: PANIC fires on a long press (LVGL default
      * 400 ms), never on a tap. The pressed-state fill is the "arming" cue. */
     lv_obj_remove_event_cb(s_panic_btn, panic_clicked_cb);

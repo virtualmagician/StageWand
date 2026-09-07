@@ -34,6 +34,7 @@ typedef enum {
     SHOWLINK_TRANSPORT_NONE = 0,  /* no fresh state from either path */
     SHOWLINK_TRANSPORT_OSC  = 1,  /* live /stagewizard/status/... feedback */
     SHOWLINK_TRANSPORT_HTTP = 2,  /* falling back to GET /status polling */
+    SHOWLINK_TRANSPORT_BLE  = 3,  /* Wi-Fi down: frames over the BLE GATT pipe */
 } showlink_transport_t;
 
 typedef struct {
@@ -96,6 +97,22 @@ int32_t showlink_cue_count(void);
 bool showlink_get_cue(int32_t index, char *number, uint32_t number_cap,
                       char *name, uint32_t name_cap,
                       char *color_tag, uint32_t tag_cap);  /* tag "" = untagged */
+
+/* BLE transport hooks — device-only; the simulator never attaches one.
+ * As built in the contract (docs/stagewizard-osc-requests.html, BLE section):
+ * the wand NOTIFIES its outbound frames (commands + pings) on TX ...0003 and
+ * the host WRITES its feedback frames to RX ...0002. A frame is a u16
+ * big-endian length followed by exactly one OSC message; frames may split
+ * across or coalesce within GATT PDUs, so both sides reassemble by length.
+ * showlink stays the single owner of the protocol: attach a send function
+ * once the central has subscribed to TX, feed it every RX write, and detach
+ * on disconnect. While attached, ALL outbound traffic goes over BLE and the
+ * UDP/HTTP paths idle (switchover, never both). */
+typedef bool (*showlink_ble_send_fn)(const uint8_t *data, uint32_t len, void *ctx);
+void showlink_ble_attach(showlink_ble_send_fn send, void *ctx, uint32_t max_chunk);
+void showlink_ble_detach(void);
+void showlink_ble_receive(const uint8_t *data, uint32_t len);
+bool showlink_ble_attached(void);
 
 #ifdef __cplusplus
 }
