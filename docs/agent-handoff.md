@@ -18,7 +18,7 @@ Repository: https://github.com/virtualmagician/StageWand
 | | |
 |---|---|
 | Board | Waveshare **ESP32-C6-Touch-AMOLED-1.8**, SKU 33305 (docs: https://docs.waveshare.com/ESP32-C6-Touch-AMOLED-1.8) |
-| **Revision in hand** | **V2** — CO5300 AMOLED driver + **CST820** touch @ I2C `0x15`. (V1 boards use SH8601 + FT3168 @ `0x38`; the official BSP auto-detects by probing the touch address, so code is revision-agnostic — but verify each new board, see §7.) |
+| **Revision in hand** | **V2** — CO5300 AMOLED driver + **CST820** touch @ I2C `0x15`. (V1 boards use SH8601 + an FT3168 touch IC that the BSP drives with its FT5x06-class driver — grep `FT5X06`, not `FT3168` — @ `0x38`; the official BSP auto-detects by probing the touch address, so code is revision-agnostic — but verify each new board, see §7.) |
 | MCU | ESP32-C6 rev v0.2: single 160 MHz RISC-V core, Wi-Fi 6, BLE 5.3 (LE only — **no Bluetooth Classic**), 802.15.4 |
 | Memory | 512 KB SRAM, **no PSRAM** (the C6 has no PSRAM interface at all); 16 MB flash |
 | Display | 1.8", **368 × 448**, QSPI, driven as RGB565 (16-bit). Brightness = MIPI-DCS `0x51` (not a backlight PWM) |
@@ -35,8 +35,9 @@ stable backgrounds. Flush areas must be even-aligned (the BSP rounds them; the
 simulator reproduces this).
 
 **Heap numbers on this board (free heap after init, measured):**
-stock config **44 KB** → with `sdkconfig.memtrim` **153 KB** → with NimBLE
-initialized and a BLE connection up **92 KB**. Keep `sdkconfig.memtrim` unless
+stock config **44 KB** (`bringup-logs/first-light-FB9C.log`) → with
+`sdkconfig.memtrim` **153 KB** (`memtrim-FB9C.log`) → with NimBLE initialized
+and a BLE connection up **92 KB** (`ble-first-FB9C.log`). Keep `sdkconfig.memtrim` unless
 you know why you're dropping it.
 
 ---
@@ -75,8 +76,10 @@ cd StageWand/Simulator
 swift build --scratch-path "$HOME/Library/Caches/AmoledSimBuild"   # ~30 s first time (compiles LVGL)
 "$HOME/Library/Caches/AmoledSimBuild/debug/AmoledSim" --snapshot /tmp/out.png --frames 150
 ```
-Expected: `Wrote snapshot to /tmp/out.png (frame_count=…, bytes_last_frame=…)`
-and a 368×448 PNG of the GO page. The `--scratch-path` keeps ~1 GB of build
+Expected, literally: `Wrote snapshot to /tmp/out.png (frame_count=3, bytes_last_frame=8064)`
+(numbers may differ slightly) and a 368×448 PNG of the GO page. `frame_count`
+is how many frames LVGL actually redrew — a static screen settles in a few —
+not the `--frames` loop count. The `--scratch-path` keeps ~1 GB of build
 artifacts out of Dropbox sync; `scripts/build_app.sh` does the same and
 produces `dist/AmoledSim.app` (ad-hoc signed, double-clickable).
 
@@ -163,8 +166,8 @@ interactively. `esptool.py --port … flash_id` identifies chip/flash/MAC.
 
 ## 6. Traps already paid for (don't rediscover these)
 
-1. **LVGL's printf has no float support** by default (`LV_SPRINTF_USE_FLOAT 0`,
-   same on device): `lv_label_set_text_fmt(..., "%f")` prints a literal `f`.
+1. **LVGL's printf has no float support** by default (`LV_USE_FLOAT` is 0 in
+   LVGL 9.5 — `CONFIG_LV_USE_FLOAT` unset on device): `lv_label_set_text_fmt(..., "%f")` prints a literal `f`.
    Format with C `snprintf` into a buffer, then `lv_label_set_text`.
 2. **`LV_DPI_DEF` is 322** (true panel ppi) — the default theme scales paddings
    from it, so slider knobs and similar overhang and get clipped at screen

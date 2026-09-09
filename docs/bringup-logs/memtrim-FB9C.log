@@ -1,0 +1,106 @@
+# StageWand-FB9C — memory-trim build (sdkconfig.memtrim, before NimBLE), 2026-09-07
+# Free heap 44 KB -> 153 KB; display/touch/UI unaffected.
+
+ESP-ROM:esp32c6-20220919
+Build:Sep 19 2022
+rst:0x15 (USB_UART_HPSYS),boot:0x7f (SPI_FAST_FLASH_BOOT)
+Saved PC:0x40870838
+SPIWP:0xee
+mode:DIO, clock div:2
+load:0x40875730,len:0x16f4
+load:0x4086b910,len:0xd58
+load:0x4086e610,len:0x3200
+entry 0x4086b91a
+I (23) boot: ESP-IDF v5.5.5 2nd stage bootloader
+I (23) boot: compile time Sep  5 2026 09:01:46
+I (24) boot: chip revision: v0.2
+I (24) boot: efuse block revision: v0.3
+I (26) boot.esp32c6: SPI Speed      : 80MHz
+I (30) boot.esp32c6: SPI Mode       : DIO
+I (34) boot.esp32c6: SPI Flash Size : 16MB
+I (38) boot: Enabling RNG early entropy source...
+I (42) boot: Partition Table:
+I (45) boot: ## Label            Usage          Type ST Offset   Length
+I (51) boot:  0 nvs              WiFi data        01 02 00009000 00006000
+I (58) boot:  1 phy_init         RF data          01 01 0000f000 00001000
+I (64) boot:  2 factory          factory app      00 00 00010000 00400000
+I (71) boot:  3 storage          Unknown data     01 82 00410000 00200000
+I (78) boot: End of partition table
+I (81) esp_image: segment 0: paddr=00010020 vaddr=42100020 size=56714h (354068) map
+I (156) esp_image: segment 1: paddr=0006673c vaddr=40800000 size=098dch ( 39132) load
+I (165) esp_image: segment 2: paddr=00070020 vaddr=42000020 size=fc604h (1033732) map
+I (363) esp_image: segment 3: paddr=0016c62c vaddr=408098dc size=14e78h ( 85624) load
+I (382) esp_image: segment 4: paddr=001814ac vaddr=4081e760 size=04900h ( 18688) load
+I (394) boot: Loaded app from partition at offset 0x10000
+I (395) boot: Disabling RNG early entropy source...
+I (405) cpu_start: Unicore app
+I (413) cpu_start: GPIO 17 and 16 are used as console UART I/O pins
+I (414) cpu_start: Pro cpu start user code
+I (414) cpu_start: cpu freq: 160000000 Hz
+I (416) app_init: Application information:
+I (419) app_init: Project name:     showcontroller
+I (424) app_init: App version:      b917ccc-dirty
+I (428) app_init: Compile time:     Sep  7 2026 19:50:14
+I (433) app_init: ELF file SHA256:  99652e134...
+I (438) app_init: ESP-IDF:          v5.5.5
+I (442) efuse_init: Min chip rev:     v0.0
+I (445) efuse_init: Max chip rev:     v0.99 
+I (449) efuse_init: Chip rev:         v0.2
+I (453) heap_init: Initializing. RAM available for dynamic allocation:
+I (459) heap_init: At 4082E110 len 0004E500 (313 KiB): RAM
+I (465) heap_init: At 4087C610 len 00002F54 (11 KiB): RAM
+I (470) heap_init: At 50000000 len 00003FE8 (15 KiB): RTCRAM
+I (476) spi_flash: detected chip: generic
+I (479) spi_flash: flash io: dio
+I (482) sleep_gpio: Configure to isolate all GPIO pins in sleep state
+I (488) sleep_gpio: Enable automatic switching of GPIO sleep configuration
+I (503) main_task: Started on CPU0
+I (506) main_task: Calling app_main()
+I (910) ESP32-C6-Touch-AMOLED-1.8: Detected board variant: V2 (CO5300 + CST820)
+I (910) showcontroller: Starting ShowController on V2 (CO5300 + CST820)
+I (913) LVGL: Starting LVGL task
+I (915) ESP32-C6-Touch-AMOLED-1.8: Initialize QSPI display for V2 (CO5300 + CST820)
+I (924) co5300: version: 2.1.0
+I (925) co5300_spi: LCD panel create success, version: 2.1.0
+W (1011) co5300_spi: The 3Ah command has been used and will be overwritten by external initialization sequence
+I (1143) CST816S: IC id: 183
+I (1144) ESP32-C6-Touch-AMOLED-1.8: Backlight on
+I (1144) PCF85063A: PCF85063A initialized successfully
+I (1146) QMI8658: QMI8658 initialized successfully
+I (1333) pp: pp rom version: 5b8dcfa
+I (1333) net80211: net80211 rom version: 5b8dcfa
+I (1335) wifi:wifi driver task: 40854370, prio:23, stack:6656, core=0
+I (1342) wifi:wifi firmware version: b9f67df
+I (1342) wifi:wifi certification version: v7.0
+I (1344) wifi:config NVS flash: enabled
+I (1348) wifi:config nano formatting: disabled
+I (1352) wifi:mac_version:HAL_MAC_ESP32AX_761,ut_version:N, band mode:0x1
+I (1359) wifi:Init data frame dynamic rx buffer num: 12
+I (1363) wifi:Init static rx mgmt buffer num: 5
+I (1367) wifi:Init management short buffer num: 32
+I (1372) wifi:Init dynamic tx buffer num: 12
+I (1376) wifi:Init static tx FG buffer num: 2
+I (1380) wifi:Init static rx buffer size: 1700 (rxctrl:92, csi:512)
+I (1386) wifi:Init static rx buffer num: 6
+I (1390) wifi:Init dynamic rx buffer num: 12
+I (1395) wifi_init: rx ba win: 4
+I (1397) wifi_init: accept mbox: 6
+I (1400) wifi_init: tcpip mbox: 32
+I (1403) wifi_init: udp mbox: 6
+I (1406) wifi_init: tcp mbox: 6
+I (1409) wifi_init: tcp tx win: 5760
+I (1412) wifi_init: tcp rx win: 5760
+I (1415) wifi_init: tcp mss: 1440
+I (1418) wifi_init: WiFi IRAM OP enabled
+I (1422) wifi_init: WiFi RX IRAM OP enabled
+I (1426) wifi_init: WiFi SLP IRAM OP enabled
+I (1431) phy_init: phy_version 344,0b4366d,Apr 10 2026,13:53:11
+I (1486) wifi:11ax coex: WDEVAX_PTI0(0x55777555), WDEVAX_PTI1(0x00003377).
+
+I (1487) wifi:mode : sta (98:a3:16:a7:fb:9c)
+I (1487) wifi:enable tsf
+I (1490) wifi_link: Wi-Fi station starting, SSID ""
+I (1493) showcontroller: ShowController UI is ready
+I (1497) main_task: Returned from app_main()
+I (11493) showcontroller: heap: free=153196 min_free_ever=148976 largest_free_block(8BIT)=131072
+I (21493) showcontroller: heap: free=153196 min_free_ever=148976 largest_free_block(8BIT)=131072

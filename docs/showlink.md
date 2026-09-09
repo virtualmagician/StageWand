@@ -156,7 +156,7 @@ six cue-tag swatches as row tints (~22% over black, standing-by deepened).
 sky/steel/navy + legacy aliases per CueListView.tagColor); absent = untagged.
 Host-side this is a one-line addition to the item encoder; the mock sends it.
 
-## Planned — BLE fallback transport (spec agreed, wand side awaits hardware)
+## BLE fallback transport — DONE on hardware 2026-09-07 (StageWizard v1.8.0 connected first try)
 
 The handoff doc now carries the BLE fallback spec: the wand advertises GATT
 service 8B0F4F44-5A5B-4EC1-A0E9-77616E640001 (RX write ...0002, TX notify

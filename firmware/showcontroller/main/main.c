@@ -2,10 +2,10 @@
  * main.c — ShowController firmware entry point for the Waveshare
  * ESP32-C6-Touch-AMOLED-1.8 (SKU 33305).
  *
- * ====================== BUILDS CLEAN, NOT YET RUN ========================
- * Compiles green for esp32c6 under ESP-IDF v5.5.5 (2026-09-05), but has
- * never been flashed: every runtime claim is unverified until a board is
- * connected. See firmware/README.md and docs/bringup.md.
+ * ========================== RUNS ON HARDWARE ==============================
+ * First light 2026-09-07 on StageWand-FB9C (V2): display, touch, RTC, IMU,
+ * UI and the BLE link verified (docs/bringup-logs/). Wi-Fi/Bonjour not yet
+ * exercised (no credentials entered). See firmware/README.md, docs/bringup.md.
  * ==========================================================================
  *
  * The display/LVGL bring-up sequence mirrors the official example

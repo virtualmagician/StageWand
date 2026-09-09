@@ -157,6 +157,8 @@ Compare, page by page:
   StageWizard's shipped `BLEWandLink` (dev D28), with the corrected
   characteristic directions: the host **writes** feedback frames to
   `...0002`, the wand **notifies** commands (and pings) on `...0003`.
-  Wand-side NimBLE bring-up is the last open item and needs the heap
+  **Done 2026-09-07:** the wand's NimBLE peripheral advertises when Wi-Fi is
+  down and StageWizard v1.8.0 auto-connected on the first try
+  (`docs/bringup-logs/ble-first-FB9C.log`). Remaining: AXP2101 battery/PWR.
   numbers from step 6 first.
 - OTA, once BLE is stable.

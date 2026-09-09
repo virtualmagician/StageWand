@@ -1,11 +1,12 @@
 # ShowController firmware — Waveshare ESP32-C6-Touch-AMOLED-1.8 (SKU 33305)
 
-> **BUILDS CLEAN, NOT YET RUN.** As of 2026-09-05 this compiles green for
-> `esp32c6` under ESP-IDF v5.5.5 with zero warnings — but it has never been
-> flashed or run, because no board has been connected yet. Everything about
-> runtime behaviour (display bring-up, touch, sensors, Wi-Fi, the StageWizard
-> link) is still unverified. Two spots are left as marked `TODO` because no
-> clean official API exists yet (see below).
+> **RUNS ON HARDWARE.** First light 2026-09-07 on StageWand-FB9C (a V2
+> board): display, touch, RTC, IMU, the UI, and the NimBLE Bluetooth link to
+> StageWizard v1.8.0 all verified (`docs/bringup-logs/`). Builds green for
+> `esp32c6` under ESP-IDF v5.5.5, zero warnings, app 0x1c8640 B (55% of the
+> 4 MB partition free). Still unverified on hardware: Wi-Fi association and
+> Bonjour discovery (no credentials entered yet). Two spots remain `TODO`
+> because no clean official API exists (AXP2101 battery/PWR — see below).
 
 ## What's here
 
@@ -49,8 +50,8 @@ firmware/showcontroller/
    `sdkconfig` is generated (and gitignored); the tracked source of truth is
    `sdkconfig.defaults`. After editing that file, `rm sdkconfig && idf.py build`
    to pick the new values up — an existing `sdkconfig` wins over the defaults.
-   Verified build: ESP-IDF v5.5.5, app 0x176550 bytes, 63% of the 4 MB
-   factory partition free.
+   Verified build: ESP-IDF v5.5.5, app 0x1c8640 bytes (with NimBLE), 55% of
+   the 4 MB factory partition free.
 
    The first `idf.py build` will resolve `main/idf_component.yml` and pull
    `waveshare/esp32_c6_touch_amoled_1_8`, `waveshare/pcf85063a`,

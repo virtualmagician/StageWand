@@ -32,9 +32,9 @@ Simulator/                  Swift package — the macOS simulator
 │   └── AmoledSim/            SwiftUI app: window chrome, inspector panel, --snapshot mode
 └── scripts/build_app.sh      packages a release build into dist/AmoledSim.app
 
-firmware/                   ESP-IDF firmware — builds clean for esp32c6 (v5.5.5), not yet run on hardware
+firmware/                   ESP-IDF firmware — runs on hardware (V2 board): display, touch, sensors, Wi-Fi/Bonjour, BLE peripheral
 ├── flash.sh                  sources ESP-IDF, flashes + opens the serial monitor
-└── showcontroller/           Wi-Fi station + Bonjour host discovery + the shared ShowUI; see firmware/README.md
+└── showcontroller/           Wi-Fi station + Bonjour discovery, NimBLE peripheral, memory trim, the shared ShowUI; see firmware/README.md
 
 docs/bringup.md              day-one hardware checklist: identify V1/V2, flash, expected log, compare to the simulator
 docs/agent-handoff.md        START HERE for a new app on this board: fresh-Mac setup, platform vs app map, verified traps
