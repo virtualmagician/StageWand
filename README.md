@@ -37,6 +37,7 @@ firmware/                   ESP-IDF firmware — builds clean for esp32c6 (v5.5.
 └── showcontroller/           Wi-Fi station + Bonjour host discovery + the shared ShowUI; see firmware/README.md
 
 docs/bringup.md              day-one hardware checklist: identify V1/V2, flash, expected log, compare to the simulator
+docs/agent-handoff.md        START HERE for a new app on this board: fresh-Mac setup, platform vs app map, verified traps
 
 tools/
 ├── mock_stagewizard.py       stand-in host: full remote surface incl. feedback + cue tags
